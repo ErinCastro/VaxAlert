@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Preferences</title>
+
+<link rel="stylesheet" href="sidebar.css">
+
+<style>
+body { display:flex; background:#f1f5f9; font-family:"Segoe UI",sans-serif; }
+.main { flex:1; padding:40px; }
+
+h1 { font-size:24px; color:#1e293b; }
+.sub { color:#64748b; margin-bottom:25px; font-size:14px; }
+
+.card {
+  background:white;
+  border-radius:14px;
+  padding:25px;
+  box-shadow:0 8px 20px rgba(0,0,0,0.05);
+  max-width:650px;
+  margin-bottom:20px;
+}
+
+.card h3 { color:#1e293b; margin-bottom:16px; }
+
+.option {
+  border:1px solid #cbd5e1;
+  padding:15px;
+  border-radius:10px;
+  margin-bottom:12px;
+  cursor:pointer;
+  transition: border-color 0.2s, background 0.2s;
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.option:hover { border-color:#94a3b8; }
+
+.option.active {
+  border:2px solid #142e5c;
+  background:#f0f4fa;
+}
+
+.option input[type="radio"] { accent-color:#142e5c; width:18px; height:18px; cursor:pointer; }
+.option-label { font-size:14px; font-weight:500; color:#334155; }
+.option-desc { font-size:12px; color:#64748b; }
+
+label { display:block; font-size:13px; margin-bottom:6px; color:#334155; font-weight:500; }
+
+input, select {
+  width:100%;
+  padding:10px 14px;
+  border-radius:8px;
+  border:1px solid #cbd5e1;
+  margin-bottom:15px;
+  font-size:14px;
+  font-family:inherit;
+}
+
+.btn {
+  background:#142e5c;
+  color:white;
+  padding:10px 20px;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:14px;
+  font-weight:600;
+  transition: background 0.2s;
+}
+
+.btn:hover { background:#0f2448; }
+
+.btn-outline {
+  background:transparent;
+  color:#142e5c;
+  border:1px solid #142e5c;
+  padding:10px 20px;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:14px;
+  font-weight:600;
+  transition: background 0.2s;
+}
+
+.btn-outline:hover { background:#f0f4fa; }
+
+.btn-danger {
+  background:#fee2e2;
+  color:#b91c1c;
+  border:1px solid #fecaca;
+  padding:6px 14px;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:13px;
+  transition: background 0.2s;
+}
+
+.btn-danger:hover { background:#fecaca; }
+
+.children-list { margin-top:12px; }
+
+.child-item {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:12px 14px;
+  border:1px solid #e2e8f0;
+  border-radius:10px;
+  margin-bottom:8px;
+}
+
+.child-info strong { color:#1e293b; }
+.child-info span { font-size:12px; color:#64748b; }
+
+.form-msg {
+  font-size:13px;
+  padding:10px 12px;
+  border-radius:8px;
+  margin-bottom:12px;
+  display:none;
+}
+
+.form-msg.success { background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; }
+.form-msg.error { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+
+#loadingIndicator { text-align:center; padding:20px; color:#64748b; }
+
+.modal {
+  display:none;
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,0.5);
+  z-index:1000;
+  justify-content:center;
+  align-items:center;
+}
+
+.modal.show { display:flex; }
+
+.modal-content {
+  background:white;
+  border-radius:14px;
+  padding:30px;
+  max-width:500px;
+  width:90%;
+  box-shadow:0 20px 60px rgba(0,0,0,0.3);
+}
+
+.modal-header {
+  font-size:18px;
+  font-weight:600;
+  color:#1e293b;
+  margin-bottom:20px;
+}
+
+.modal-buttons {
+  display:flex;
+  gap:12px;
+  margin-top:20px;
+  justify-content:flex-end;
+}
+
+.btn-secondary {
+  background:#e2e8f0;
+  color:#334155;
+  padding:10px 20px;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:14px;
+  font-weight:600;
+  transition: background 0.2s;
+}
+
+.btn-secondary:hover { background:#cbd5e1; }
+</style>
+</head>
+
+<body>
+
+<div class="sidebar">
+  <div>
+    <div class="sidebar-header">
+      <img src="logo.png" class="sidebar-logo">
+      <div class="sidebar-text">
+        <div class="sidebar-title">VaxAlert</div>
+        <div class="sidebar-sub">Reganion Children's Clinic</div>
+      </div>
+    </div>
+
+    <div class="menu">
+      <a href="parentdb.html">Dashboard</a>
+      <a href="schedule.html">Schedule</a>
+      <a href="history.html">History</a>
+      <a href="preferences.html" class="active">Preferences</a>
+      <a href="profile.html">Profile</a>
+    </div>
+  </div>
+
+  <div class="profile">
+    <div class="profile-name" id="sidebarName">Loading...</div>
+    <div style="font-size:12px;color:#64748b;">parent</div>
+    <div class="signout" onclick="logout()">Sign Out</div>
+  </div>
+</div>
+
+<div class="main">
+  <h1>Preferences</h1>
+  <div class="sub">Manage children and reminder settings</div>
+
+  <div id="loadingIndicator"><p>Loading...</p></div>
+
+  <!-- Children Management -->
+  <div class="card" id="childrenCard" style="display:none;">
+    <h3>Your Children</h3>
+
+    <div class="children-list" id="childrenList"></div>
+
+    <div style="margin-top:16px; border-top:1px solid #e2e8f0; padding-top:16px;">
+      <h4 style="margin-bottom:12px; color:#334155;">Add a Child</h4>
+      <div id="addChildMsg" class="form-msg"></div>
+      <div style="display:flex; gap:12px;">
+        <div style="flex:1;"><label>First Name</label><input type="text" id="childFirstName" placeholder="Juan"></div>
+        <div style="flex:1;"><label>Last Name</label><input type="text" id="childLastName" placeholder="Reyes"></div>
+      </div>
+      <div style="display:flex; gap:12px;">
+        <div style="flex:1;"><label>Date of Birth</label><input type="date" id="childBirthDate"></div>
+        <div style="flex:1;">
+          <label>Sex</label>
+          <select id="childSex">
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn" onclick="addChild()">+ Add Child</button>
+    </div>
+  </div>
+
+  <!-- Reminder Preferences -->
+  <div class="card" id="prefsCard" style="display:none;">
+    <h3>Reminder Preferences</h3>
+    <p style="font-size:13px; color:#64748b; margin-bottom:16px;">Choose how you want to receive vaccination alerts</p>
+
+    <div id="prefsMsg" class="form-msg"></div>
+
+    <div class="option" data-value="sms" onclick="selectMethod(this)">
+      <input type="radio" name="reminderMethod" value="sms">
+      <div>
+        <div class="option-label">SMS Only</div>
+        <div class="option-desc">Receive reminders via text message</div>
+      </div>
+    </div>
+
+    <div class="option" data-value="email" onclick="selectMethod(this)">
+      <input type="radio" name="reminderMethod" value="email">
+      <div>
+        <div class="option-label">Email Only</div>
+        <div class="option-desc">Receive reminders via email</div>
+      </div>
+    </div>
+
+    <div class="option" data-value="both" onclick="selectMethod(this)">
+      <input type="radio" name="reminderMethod" value="both">
+      <div>
+        <div class="option-label">Both SMS & Email</div>
+        <div class="option-desc">Recommended — get reminders on both channels</div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <label>Remind me this many days before due date</label>
+      <select id="reminderDays">
+        <option value="3">3 days before</option>
+        <option value="7">7 days before</option>
+        <option value="14">14 days before</option>
+        <option value="30">30 days before</option>
+      </select>
+    </div>
+
+    <button class="btn" onclick="savePreferences()">Save Preferences</button>
+  </div>
+
+  <!-- Reminder Logs -->
+  <div class="card" id="logsCard" style="display:none;">
+    <h3>Reminder Logs</h3>
+    <p style="font-size:13px; color:#64748b; margin-bottom:16px;">Recent reminders sent to you</p>
+
+    <div id="logsContainer"></div>
+  </div>
+
+  <!-- Edit Child Modal -->
+  <div id="editChildModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">Edit Child</div>
+      <div id="editChildMsg" class="form-msg"></div>
+      <div style="display:flex; gap:12px;">
+        <div style="flex:1;"><label>First Name</label><input type="text" id="editChildFirstName" placeholder="Juan"></div>
+        <div style="flex:1;"><label>Last Name</label><input type="text" id="editChildLastName" placeholder="Reyes"></div>
+      </div>
+      <div style="display:flex; gap:12px;">
+        <div style="flex:1;"><label>Date of Birth</label><input type="date" id="editChildBirthDate"></div>
+        <div style="flex:1;">
+          <label>Sex</label>
+          <select id="editChildSex">
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="closeEditModal()">Cancel</button>
+        <button class="btn" onclick="updateChild()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE_URL = "http://localhost:5502";
+
+function getAuthToken() { return localStorage.getItem("idToken"); }
+
+async function apiCall(endpoint, options = {}) {
+  const token = getAuthToken();
+  if (!token) { window.location.href = "login.html"; return null; }
+  const headers = { "Content-Type": "application/json", "Authorization": `Bearer ${token}`, ...options.headers };
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
+    if (response.status === 401) { localStorage.clear(); window.location.href = "login.html"; return null; }
+    if (!response.ok) { const err = await response.json().catch(() => ({})); return { _error: true, ...err }; }
+    return await response.json();
+  } catch (error) { console.error("API call failed:", error); return null; }
+}
+
+function formatDate(timestamp) {
+  if (!timestamp) return "N/A";
+  const date = new Date(typeof timestamp === "number" ? timestamp : timestamp.seconds * 1000);
+  return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
+function showMsg(id, text, isError) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = `form-msg ${isError ? 'error' : 'success'}`;
+  el.style.display = "block";
+  setTimeout(() => { el.style.display = "none"; }, 4000);
+}
+
+// ─── Children ───
+async function loadChildren() {
+  const children = await apiCall("/api/parent/children");
+  const list = document.getElementById("childrenList");
+  list.innerHTML = "";
+
+  if (!children || children._error || !Array.isArray(children) || children.length === 0) {
+    list.innerHTML = '<p style="color:#64748b; font-size:14px;">No children added yet.</p>';
+    return;
+  }
+
+  children.forEach(child => {
+    const div = document.createElement("div");
+    div.className = "child-item";
+    div.innerHTML = `
+      <div class="child-info">
+        <strong>${child.firstName} ${child.lastName}</strong><br>
+        <span>Born: ${formatDate(child.birthDate)} · ${child.sex || "N/A"} · Age: ${child.age !== null ? child.age : 'N/A'}</span>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-outline" style="padding:6px 12px; font-size:13px;" onclick="openEditModal('${child.id}', '${child.firstName}', '${child.lastName}', '${child.birthDate}', '${child.sex}')">Edit</button>
+        <button class="btn-danger" onclick="removeChild('${child.id}', '${child.firstName}')">Remove</button>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+async function addChild() {
+  const firstName = document.getElementById("childFirstName").value.trim();
+  const lastName = document.getElementById("childLastName").value.trim();
+  const birthDate = document.getElementById("childBirthDate").value;
+  const sex = document.getElementById("childSex").value;
+
+  if (!firstName || !lastName || !birthDate) {
+    showMsg("addChildMsg", "Please fill in all fields.", true);
+    return;
+  }
+
+  const result = await apiCall("/api/parent/children", {
+    method: "POST",
+    body: JSON.stringify({ firstName, lastName, birthDate, sex }),
+  });
+
+  if (result && !result._error) {
+    showMsg("addChildMsg", `${firstName} added successfully! Vaccination schedule generated.`, false);
+    document.getElementById("childFirstName").value = "";
+    document.getElementById("childLastName").value = "";
+    document.getElementById("childBirthDate").value = "";
+    loadChildren();
+  } else {
+    showMsg("addChildMsg", result?.error || "Failed to add child.", true);
+  }
+}
+
+async function removeChild(childId, name) {
+  if (!confirm(`Remove ${name}? This will also delete their vaccination records.`)) return;
+
+  const result = await apiCall(`/api/parent/children/${childId}`, { method: "DELETE" });
+  if (result && !result._error) {
+    loadChildren();
+  } else {
+    alert("Failed to remove child.");
+  }
+}
+
+let currentEditChildId = null;
+
+function openEditModal(childId, firstName, lastName, birthDate, sex) {
+  currentEditChildId = childId;
+  document.getElementById("editChildFirstName").value = firstName;
+  document.getElementById("editChildLastName").value = lastName;
+  
+  // Convert timestamp to date format if necessary
+  let dateStr = birthDate;
+  if (typeof birthDate === 'number' || (typeof birthDate === 'object' && birthDate.seconds)) {
+    const timestamp = typeof birthDate === 'number' ? birthDate : birthDate.seconds * 1000;
+    const date = new Date(timestamp);
+    dateStr = date.toISOString().split('T')[0];
+  }
+  document.getElementById("editChildBirthDate").value = dateStr;
+  document.getElementById("editChildSex").value = sex;
+  document.getElementById("editChildMsg").style.display = "none";
+  document.getElementById("editChildModal").classList.add("show");
+}
+
+function closeEditModal() {
+  document.getElementById("editChildModal").classList.remove("show");
+  currentEditChildId = null;
+}
+
+async function updateChild() {
+  if (!currentEditChildId) return;
+
+  const firstName = document.getElementById("editChildFirstName").value.trim();
+  const lastName = document.getElementById("editChildLastName").value.trim();
+  const birthDate = document.getElementById("editChildBirthDate").value;
+  const sex = document.getElementById("editChildSex").value;
+
+  if (!firstName || !lastName || !birthDate) {
+    showMsg("editChildMsg", "Please fill in all fields.", true);
+    return;
+  }
+
+  const result = await apiCall(`/api/parent/children/${currentEditChildId}`, {
+    method: "PUT",
+    body: JSON.stringify({ firstName, lastName, birthDate, sex }),
+  });
+
+  if (result && !result._error) {
+    showMsg("editChildMsg", "Child updated successfully!", false);
+    setTimeout(() => {
+      closeEditModal();
+      loadChildren();
+    }, 1500);
+  } else {
+    showMsg("editChildMsg", result?.error || "Failed to update child.", true);
+  }
+}
+
+// ─── Preferences ───
+function selectMethod(el) {
+  document.querySelectorAll(".option").forEach(o => o.classList.remove("active"));
+  el.classList.add("active");
+  el.querySelector("input[type='radio']").checked = true;
+}
+
+async function loadPreferences() {
+  const prefs = await apiCall("/api/parent/preferences");
+  if (prefs) {
+    // Set the active option
+    const method = prefs.reminderMethod || "both";
+    document.querySelectorAll(".option").forEach(o => {
+      if (o.dataset.value === method) {
+        o.classList.add("active");
+        o.querySelector("input[type='radio']").checked = true;
+      }
+    });
+
+    // Set days
+    const days = prefs.reminderDaysBefore || 7;
+    document.getElementById("reminderDays").value = days;
+  }
+}
+
+async function savePreferences() {
+  const selected = document.querySelector("input[name='reminderMethod']:checked");
+  if (!selected) {
+    showMsg("prefsMsg", "Please select a reminder method.", true);
+    return;
+  }
+
+  const result = await apiCall("/api/parent/preferences", {
+    method: "PUT",
+    body: JSON.stringify({
+      reminderMethod: selected.value,
+      reminderDaysBefore: parseInt(document.getElementById("reminderDays").value),
+    }),
+  });
+
+  if (result && !result._error) {
+    showMsg("prefsMsg", "Preferences saved successfully!", false);
+  } else {
+    showMsg("prefsMsg", "Failed to save preferences.", true);
+  }
+}
+
+// ─── Reminder Logs ───
+async function loadReminderLogs() {
+  const logs = await apiCall("/api/parent/reminder-logs");
+  const container = document.getElementById("logsContainer");
+
+  if (!logs || logs._error || !Array.isArray(logs) || logs.length === 0) {
+    container.innerHTML = '<p style="color:#64748b; font-size:14px;">No reminders have been sent yet.</p>';
+    return;
+  }
+
+  let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
+  html += '<thead><tr><th style="text-align:left; padding:8px; background:#f8fafc; color:#475569;">Child</th><th style="text-align:left; padding:8px; background:#f8fafc; color:#475569;">Vaccine</th><th style="text-align:left; padding:8px; background:#f8fafc; color:#475569;">Method</th><th style="text-align:left; padding:8px; background:#f8fafc; color:#475569;">Status</th><th style="text-align:left; padding:8px; background:#f8fafc; color:#475569;">Sent</th></tr></thead><tbody>';
+
+  logs.forEach(log => {
+    const statusColor = log.status === "sent" ? "#047857" : "#b91c1c";
+    html += `<tr>
+      <td style="padding:8px; border-top:1px solid #e2e8f0;">${log.childName}</td>
+      <td style="padding:8px; border-top:1px solid #e2e8f0;">${log.vaccineName} (${log.dose})</td>
+      <td style="padding:8px; border-top:1px solid #e2e8f0;">${log.method}</td>
+      <td style="padding:8px; border-top:1px solid #e2e8f0; color:${statusColor}; font-weight:600;">${log.status}</td>
+      <td style="padding:8px; border-top:1px solid #e2e8f0;">${formatDate(log.sentAt)}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// ─── Initialize ───
+async function initializePage() {
+  const loading = document.getElementById("loadingIndicator");
+
+  // Close modal when clicking outside
+  document.getElementById("editChildModal").addEventListener("click", function(e) {
+    if (e.target === this) closeEditModal();
+  });
+
+  const profile = await apiCall("/api/parent/profile");
+  if (profile && !profile._error) {
+    document.getElementById("sidebarName").textContent = `${profile.firstName} ${profile.lastName}`;
+  }
+
+  // Load each section independently — one failure shouldn't block others
+  try { await loadChildren(); } catch (e) { console.error("loadChildren failed:", e); }
+  try { await loadPreferences(); } catch (e) { console.error("loadPreferences failed:", e); }
+  try { await loadReminderLogs(); } catch (e) { console.error("loadReminderLogs failed:", e); }
+
+  // Always hide loading and show cards regardless of individual failures
+  loading.style.display = "none";
+  document.getElementById("childrenCard").style.display = "block";
+  document.getElementById("prefsCard").style.display = "block";
+  document.getElementById("logsCard").style.display = "block";
+}
+
+function logout() { localStorage.clear(); window.location.href = "login.html"; }
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializePage);
+} else {
+  initializePage();
+}
+</script>
+
+</body>
+</html>

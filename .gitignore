@@ -1,0 +1,41 @@
+# Environment variables (contains API keys)
+.env
+.env.local
+.env.*.local
+
+# Firebase service account (sensitive credentials)
+backend/firebaseServiceAccount.json
+backend/config/firebaseServiceAccount.json
+
+# Node modules
+node_modules/
+package-lock.json
+yarn.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Build outputs
+dist/
+build/
+out/
