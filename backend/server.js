@@ -4,8 +4,10 @@ const crypto = require("crypto");
 const https = require("https");
 const { db, auth } = require("./config/firebase");
 const nodemailer = require("nodemailer");
+const twilio = require("twilio");
 const express = require("express");
 const cors = require("cors");
+const cron = require("node-cron");
 
 const app = express();
 
@@ -56,6 +58,11 @@ const emailTransporter = process.env.EMAIL_USER && process.env.EMAIL_PASS
     })
   : null;
 
+const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
+  ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+  : null;
+const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER || null;
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -97,6 +104,24 @@ app.get("/api/auth/register", (req, res) => {
     error: "Method Not Allowed. Use POST /api/auth/register with a JSON body.",
   });
 });
+
+// Phone number formatting — normalise to +639XXXXXXXXX
+function formatPhoneNumber(raw) {
+  if (!raw) return { error: "Contact number is required." };
+  let digits = raw.replace(/[\s\-().]/g, ""); // strip spaces, dashes, parens, dots
+  if (digits.startsWith("+")) digits = digits.slice(1); // remove leading +
+  // 630XXXXXXXXX → 639XXXXXXXXX  (user typed +63 before 09XX number)
+  if (digits.startsWith("630") && digits.length === 13) digits = "63" + digits.slice(3);
+  // 09XXXXXXXXX  → 639XXXXXXXXX
+  if (digits.startsWith("0") && digits.length === 11) digits = "63" + digits.slice(1);
+  // 9XXXXXXXXX   → 639XXXXXXXXX
+  if (digits.startsWith("9") && digits.length === 10) digits = "63" + digits;
+  // Must now be 63 + 10 digits = 12 digits
+  if (!/^63\d{10}$/.test(digits)) {
+    return { error: "Invalid phone number. Use format: +639XXXXXXXXX" };
+  }
+  return { formatted: "+" + digits };
+}
 
 // Password validation (at least 8 characters, one number, one symbol)
 function isPasswordValid(password) {
@@ -144,6 +169,13 @@ app.post("/api/auth/register", async (req, res) => {
     });
   }
 
+  // Validate & format phone number
+  const phoneResult = formatPhoneNumber(contactNumber);
+  if (phoneResult.error) {
+    return res.status(400).json({ error: phoneResult.error });
+  }
+  const formattedPhone = phoneResult.formatted;
+
   try {
     // Check if email already exists
     try {
@@ -154,7 +186,7 @@ app.post("/api/auth/register", async (req, res) => {
     }
 
     // Check if contact number already exists
-    const existingContact = await db.collection("users").where("contactNumber", "==", contactNumber.trim()).limit(1).get();
+    const existingContact = await db.collection("users").where("contactNumber", "==", formattedPhone).limit(1).get();
     if (!existingContact.empty) {
       return res.status(400).json({ error: "This contact number is already registered." });
     }
@@ -173,7 +205,7 @@ app.post("/api/auth/register", async (req, res) => {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       email: trimmedEmail,
-      contactNumber: contactNumber.trim(),
+      contactNumber: formattedPhone,
       role: "parent",
       emailVerified: false,
       createdAt: Date.now(),
@@ -200,7 +232,7 @@ app.post("/api/auth/register", async (req, res) => {
     if (emailTransporter) {
       try {
         await emailTransporter.sendMail({
-          from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+          from: `"VaxAlert Clinic" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
           to: trimmedEmail,
           subject: "Verify your VaxAlert email",
           html: `
@@ -451,10 +483,17 @@ app.put("/api/parent/update-profile", verifyIdToken, async (req, res) => {
       return res.status(400).json({ error: "First name, last name, and contact number are required." });
     }
 
+    // Validate & format phone number
+    const phoneResult = formatPhoneNumber(contactNumber);
+    if (phoneResult.error) {
+      return res.status(400).json({ error: phoneResult.error });
+    }
+    const formattedPhone = phoneResult.formatted;
+
     // Check if contact number is used by someone else
     const existingContact = await db
       .collection("users")
-      .where("contactNumber", "==", contactNumber.trim())
+      .where("contactNumber", "==", formattedPhone)
       .limit(1)
       .get();
 
@@ -467,7 +506,7 @@ app.put("/api/parent/update-profile", verifyIdToken, async (req, res) => {
     await db.collection("users").doc(userId).update({
       firstName: firstName.trim(),
       lastName: lastName.trim(),
-      contactNumber: contactNumber.trim(),
+      contactNumber: formattedPhone,
       updatedAt: Date.now(),
     });
 
@@ -481,7 +520,7 @@ app.put("/api/parent/update-profile", verifyIdToken, async (req, res) => {
       message: "Profile updated successfully.",
       firstName: firstName.trim(),
       lastName: lastName.trim(),
-      contactNumber: contactNumber.trim(),
+      contactNumber: formattedPhone,
     });
   } catch (error) {
     console.error("Update profile error:", error);
@@ -684,6 +723,75 @@ app.get("/api/staff/profile", verifyIdToken, async (req, res) => {
   }
 });
 
+// GET /api/staff/parents - Fetch list of all parent accounts for staff
+app.get("/api/staff/parents", verifyIdToken, async (req, res) => {
+  try {
+    const userId = req.uid;
+    const staffDoc = await db.collection("users").doc(userId).get();
+    if (!staffDoc.exists || staffDoc.data().role !== "staff") {
+      return res.status(403).json({ error: "Unauthorized. Staff access only." });
+    }
+
+    const snapshot = await db.collection("users").where("role", "==", "parent").get();
+    const parents = [];
+    snapshot.forEach(doc => {
+      const d = doc.data();
+      parents.push({ id: doc.id, firstName: d.firstName, lastName: d.lastName, email: d.email });
+    });
+    parents.sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`));
+    res.status(200).json(parents);
+  } catch (error) {
+    console.error("Fetch parents error:", error);
+    res.status(500).json({ error: "Failed to fetch parents." });
+  }
+});
+
+// POST /api/staff/children - Add a new child profile (staff)
+app.post("/api/staff/children", verifyIdToken, async (req, res) => {
+  try {
+    const userId = req.uid;
+    const staffDoc = await db.collection("users").doc(userId).get();
+    if (!staffDoc.exists || staffDoc.data().role !== "staff") {
+      return res.status(403).json({ error: "Unauthorized. Staff access only." });
+    }
+
+    const { firstName, lastName, birthDate, sex, parentId } = req.body;
+    if (!firstName || !lastName || !birthDate || !parentId) {
+      return res.status(400).json({ error: "First name, last name, birth date, and parent are required." });
+    }
+
+    const parentDoc = await db.collection("users").doc(parentId).get();
+    if (!parentDoc.exists || parentDoc.data().role !== "parent") {
+      return res.status(400).json({ error: "Invalid parent account." });
+    }
+
+    console.log(`Staff ${userId} adding child ${firstName} ${lastName} for parent ${parentId}`);
+
+    const childRef = await db.collection("children").add({
+      parentId,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      birthDate: new Date(birthDate).getTime(),
+      sex: sex || "not specified",
+      createdAt: Date.now(),
+    });
+
+    try {
+      await generateVaccinationSchedule(childRef.id, new Date(birthDate));
+      console.log(`Successfully created child ${childRef.id} with vaccination schedule`);
+    } catch (scheduleError) {
+      console.error(`Failed to generate schedule for child ${childRef.id}:`, scheduleError);
+      await db.collection("children").doc(childRef.id).delete();
+      return res.status(500).json({ error: "Failed to generate vaccination schedule." });
+    }
+
+    res.status(201).json({ message: "Child added successfully.", childId: childRef.id });
+  } catch (error) {
+    console.error("Add child (staff) error:", error);
+    res.status(500).json({ error: "Failed to add child." });
+  }
+});
+
 // GET /api/staff/children - Fetch all children for staff view
 app.get("/api/staff/children", verifyIdToken, async (req, res) => {
   try {
@@ -759,6 +867,71 @@ app.get("/api/staff/children", verifyIdToken, async (req, res) => {
   } catch (error) {
     console.error("Fetch children error:", error);
     res.status(500).json({ error: "Failed to fetch children." });
+  }
+});
+
+// GET /api/staff/children/:childId/vaccinations - Fetch full vaccination info for a specific child
+app.get("/api/staff/children/:childId/vaccinations", verifyIdToken, async (req, res) => {
+  try {
+    const { childId } = req.params;
+    const userId = req.uid;
+
+    // Verify staff role
+    const staffDoc = await db.collection("users").doc(userId).get();
+    if (!staffDoc.exists || staffDoc.data().role !== "staff") {
+      return res.status(403).json({ error: "Unauthorized. Staff access only." });
+    }
+
+    const childDoc = await db.collection("children").doc(childId).get();
+    if (!childDoc.exists) {
+      return res.status(404).json({ error: "Child not found." });
+    }
+
+    const vaccSnapshot = await db
+      .collection("children")
+      .doc(childId)
+      .collection("vaccinations")
+      .get();
+
+    const now = Date.now();
+    const scheduled = [];
+    const administered = [];
+
+    vaccSnapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data.type === "administered") {
+        administered.push({
+          id: doc.id,
+          vaccineName: data.vaccineName,
+          dose: data.dose,
+          administeredDate: typeof data.administeredDate === "number" ? data.administeredDate : data.administeredDate?.seconds * 1000 || null,
+          administeredBy: data.administeredBy || null,
+          notes: data.notes || null,
+        });
+      } else {
+        const dueTime = typeof data.dueDate === "number" ? data.dueDate : data.dueDate?.seconds * 1000;
+        const daysUntilDue = Math.floor((dueTime - now) / (1000 * 60 * 60 * 24));
+        let status = "upcoming";
+        if (daysUntilDue < 0) status = "overdue";
+        else if (daysUntilDue <= 30) status = "due-soon";
+        scheduled.push({
+          id: doc.id,
+          vaccineName: data.vaccineName,
+          dose: data.dose,
+          dueDate: dueTime,
+          status,
+          daysUntilDue,
+        });
+      }
+    });
+
+    scheduled.sort((a, b) => a.dueDate - b.dueDate);
+    administered.sort((a, b) => (b.administeredDate || 0) - (a.administeredDate || 0));
+
+    res.status(200).json({ scheduled, administered });
+  } catch (error) {
+    console.error("Fetch child vaccinations error:", error);
+    res.status(500).json({ error: "Failed to fetch vaccination info." });
   }
 });
 
@@ -846,8 +1019,13 @@ app.get("/api/staff/reminder-logs", verifyIdToken, async (req, res) => {
         id: doc.id,
         sentAt: data.sentAt,
         childName: data.childName,
+        vaccineName: data.vaccineName || null,
+        dose: data.dose || null,
+        dueDate: data.dueDate || null,
         method: data.method,
         status: data.status,
+        reason: data.reason || null,
+        type: data.type || "automated",
       });
     });
     
@@ -1106,6 +1284,57 @@ app.get("/api/admin/profile", verifyIdToken, async (req, res) => {
   }
 });
 
+// GET /api/admin/children/:childId/vaccinations - Fetch full vaccination info for a specific child (admin)
+app.get("/api/admin/children/:childId/vaccinations", verifyIdToken, async (req, res) => {
+  try {
+    const { childId } = req.params;
+    const userId = req.uid;
+
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists || userDoc.data().role !== "admin") {
+      return res.status(403).json({ error: "Access denied. Admin role required." });
+    }
+
+    const childDoc = await db.collection("children").doc(childId).get();
+    if (!childDoc.exists) {
+      return res.status(404).json({ error: "Child not found." });
+    }
+
+    const vaccSnapshot = await db.collection("children").doc(childId).collection("vaccinations").get();
+    const now = Date.now();
+    const scheduled = [];
+    const administered = [];
+
+    vaccSnapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data.type === "administered") {
+        administered.push({
+          id: doc.id,
+          vaccineName: data.vaccineName,
+          dose: data.dose,
+          administeredDate: typeof data.administeredDate === "number" ? data.administeredDate : data.administeredDate?.seconds * 1000 || null,
+          administeredBy: data.administeredBy || null,
+          notes: data.notes || null,
+        });
+      } else {
+        const dueTime = typeof data.dueDate === "number" ? data.dueDate : data.dueDate?.seconds * 1000;
+        const daysUntilDue = Math.floor((dueTime - now) / (1000 * 60 * 60 * 24));
+        let status = "upcoming";
+        if (daysUntilDue < 0) status = "overdue";
+        else if (daysUntilDue <= 30) status = "due-soon";
+        scheduled.push({ id: doc.id, vaccineName: data.vaccineName, dose: data.dose, dueDate: dueTime, status, daysUntilDue });
+      }
+    });
+
+    scheduled.sort((a, b) => a.dueDate - b.dueDate);
+    administered.sort((a, b) => (b.administeredDate || 0) - (a.administeredDate || 0));
+    res.status(200).json({ scheduled, administered });
+  } catch (error) {
+    console.error("Admin fetch child vaccinations error:", error);
+    res.status(500).json({ error: "Failed to fetch vaccination info." });
+  }
+});
+
 // GET /api/admin/vaccinations - All vaccinations for admin dashboard
 app.get("/api/admin/vaccinations", verifyIdToken, async (req, res) => {
   try {
@@ -1183,8 +1412,13 @@ app.get("/api/admin/reminder-logs", verifyIdToken, async (req, res) => {
         id: doc.id,
         sentAt: data.sentAt,
         childName: data.childName,
+        vaccineName: data.vaccineName || null,
+        dose: data.dose || null,
+        dueDate: data.dueDate || null,
         method: data.method,
         status: data.status,
+        reason: data.reason || null,
+        type: data.type || "automated",
       });
     });
     
@@ -1293,6 +1527,136 @@ app.put("/api/parent/preferences", verifyIdToken, async (req, res) => {
 // REMINDER SYSTEM
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// POST /api/parent/test-reminder - Send a test reminder for the logged-in parent
+app.post("/api/parent/test-reminder", verifyIdToken, async (req, res) => {
+  try {
+    const userId = req.uid;
+
+    // Get parent profile
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists || userDoc.data().role !== "parent") {
+      return res.status(403).json({ error: "Only parent accounts can send test reminders." });
+    }
+    const userData = userDoc.data();
+    const parentName = `${userData.firstName} ${userData.lastName}`;
+
+    // Get preference for reminder method
+    const prefDoc = await db.collection("preferences").doc(userId).get();
+    const prefs = prefDoc.exists ? prefDoc.data() : { reminderMethod: "both" };
+    const method = prefs.reminderMethod || "both";
+
+    // Get all children
+    const childrenSnapshot = await db.collection("children").where("parentId", "==", userId).get();
+    if (childrenSnapshot.empty) {
+      return res.status(400).json({ error: "No children found. Add a child first." });
+    }
+
+    let remindersSent = 0;
+    const details = [];
+
+    for (const childDoc of childrenSnapshot.docs) {
+      const childData = childDoc.data();
+      const childName = `${childData.firstName} ${childData.lastName}`;
+
+      const vaccSnapshot = await db
+        .collection("children")
+        .doc(childDoc.id)
+        .collection("vaccinations")
+        .get();
+
+      for (const vaccDoc of vaccSnapshot.docs) {
+        const vaccData = vaccDoc.data();
+
+        // Skip administered vaccinations
+        if (vaccData.type === "administered") continue;
+
+        const dueDate = typeof vaccData.dueDate === "number" ? vaccData.dueDate : vaccData.dueDate?.seconds * 1000;
+        if (!dueDate) continue;
+
+        let emailResult = { sent: false };
+        let smsResult = { sent: false };
+
+        // Send email if method is email or both
+        if (method === "email" || method === "both") {
+          emailResult = await sendReminderEmail(
+            userData.email, parentName, childName,
+            vaccData.vaccineName, vaccData.dose, dueDate
+          );
+        }
+
+        // Send SMS if method is sms or both
+        if (method === "sms" || method === "both") {
+          smsResult = await sendReminderSMS(
+            userData.contactNumber, parentName, childName,
+            vaccData.vaccineName, vaccData.dose, dueDate
+          );
+        }
+
+        const anySent = emailResult.sent || smsResult.sent;
+        const today = new Date().toISOString().split("T")[0];
+
+        // Only log if at least one method succeeded
+        if (anySent) {
+          await db.collection("reminderLogs").add({
+            userId,
+            childId: childDoc.id,
+            childName,
+            vaccinationId: vaccDoc.id,
+            vaccineName: vaccData.vaccineName,
+            dose: vaccData.dose,
+            dueDate,
+            method,
+            status: "sent",
+            type: "test",
+            sentDate: today,
+            sentAt: Date.now(),
+          });
+        }
+
+        const reasons = [emailResult.reason, smsResult.reason].filter(Boolean).join("; ");
+
+        details.push({
+          child: childName,
+          vaccine: `${vaccData.vaccineName} (${vaccData.dose})`,
+          status: anySent ? "sent" : "failed",
+          emailSent: emailResult.sent,
+          smsSent: smsResult.sent,
+          reason: reasons || null,
+        });
+
+        if (anySent) remindersSent++;
+      }
+    }
+
+    if (details.length === 0) {
+      return res.status(200).json({
+        message: "No scheduled vaccinations found for your children.",
+        remindersSent: 0,
+        method,
+      });
+    }
+
+    if (remindersSent === 0 && details.length > 0) {
+      return res.status(200).json({
+        message: "Sending failed. Please check your email/SMS configuration.",
+        remindersSent: 0,
+        method,
+        details,
+      });
+    }
+
+    res.status(200).json({
+      message: `${remindersSent} test reminder(s) sent via ${method}.`,
+      remindersSent,
+      method,
+      details,
+    });
+  } catch (error) {
+    console.error("Test reminder error:", error);
+    res.status(500).json({ error: "Failed to send test reminders." });
+  }
+});
+
 // Send reminder email helper
 async function sendReminderEmail(toEmail, parentName, childName, vaccineName, dose, dueDate) {
   if (!emailTransporter) {
@@ -1306,7 +1670,7 @@ async function sendReminderEmail(toEmail, parentName, childName, vaccineName, do
 
   try {
     await emailTransporter.sendMail({
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      from: `"VaxAlert Clinic" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
       to: toEmail,
       subject: `VaxAlert Reminder: ${vaccineName} (${dose}) for ${childName}`,
       html: `
@@ -1334,6 +1698,130 @@ async function sendReminderEmail(toEmail, parentName, childName, vaccineName, do
   }
 }
 
+// Send reminder SMS helper
+async function sendReminderSMS(toPhone, parentName, childName, vaccineName, dose, dueDate) {
+  if (!twilioClient || !TWILIO_PHONE) {
+    console.warn("Twilio not configured. Skipping SMS to:", toPhone);
+    return { sent: false, reason: "SMS not configured (Twilio credentials missing)" };
+  }
+
+  if (!toPhone) {
+    return { sent: false, reason: "No contact number on file" };
+  }
+
+  const formattedDate = new Date(dueDate).toLocaleDateString("en-US", {
+    year: "numeric", month: "long", day: "numeric",
+  });
+
+  try {
+    await twilioClient.messages.create({
+      body: `VaxAlert Reminder: Hi ${parentName}, ${childName} has an upcoming vaccination — ${vaccineName} (${dose}), due ${formattedDate}. Please contact your healthcare provider to schedule.`,
+      from: TWILIO_PHONE,
+      to: toPhone,
+    });
+    return { sent: true, method: "sms" };
+  } catch (err) {
+    console.error("Reminder SMS failed:", err.message);
+    return { sent: false, reason: err.message, method: "sms" };
+  }
+}
+
+// Reusable function: check and send reminders for all parents
+async function runReminderCheck() {
+  const now = Date.now();
+  let remindersSent = 0;
+
+  console.log("[Reminder] Starting reminder check at", new Date().toLocaleString());
+
+  const usersSnapshot = await db.collection("users").where("role", "==", "parent").get();
+  console.log(`[Reminder] Found ${usersSnapshot.size} parent accounts`);
+
+  for (const userDoc of usersSnapshot.docs) {
+    const userId = userDoc.id;
+    const userData = userDoc.data();
+
+    const prefDoc = await db.collection("preferences").doc(userId).get();
+    const prefs = prefDoc.exists ? prefDoc.data() : { reminderMethod: "both", reminderDaysBefore: 7 };
+
+    const childrenSnapshot = await db.collection("children").where("parentId", "==", userId).get();
+
+    for (const childDoc of childrenSnapshot.docs) {
+      const childData = childDoc.data();
+      const childName = `${childData.firstName} ${childData.lastName}`;
+
+      const vaccSnapshot = await db
+        .collection("children")
+        .doc(childDoc.id)
+        .collection("vaccinations")
+        .get();
+
+      for (const vaccDoc of vaccSnapshot.docs) {
+        const vaccData = vaccDoc.data();
+        if (vaccData.type === "administered") continue;
+
+        const dueDate = typeof vaccData.dueDate === "number" ? vaccData.dueDate : vaccData.dueDate?.seconds * 1000;
+        if (!dueDate) continue;
+        const daysUntilDue = Math.floor((dueDate - now) / (1000 * 60 * 60 * 24));
+
+        if (daysUntilDue >= 0 && daysUntilDue <= prefs.reminderDaysBefore) {
+          const today = new Date().toISOString().split("T")[0];
+          const existingReminder = await db
+            .collection("reminderLogs")
+            .where("userId", "==", userId)
+            .where("vaccinationId", "==", vaccDoc.id)
+            .where("sentDate", "==", today)
+            .limit(1)
+            .get();
+
+          if (!existingReminder.empty) continue;
+
+          const parentName = `${userData.firstName} ${userData.lastName}`;
+          let emailResult = { sent: false };
+          let smsResult = { sent: false };
+
+          if (prefs.reminderMethod === "email" || prefs.reminderMethod === "both") {
+            emailResult = await sendReminderEmail(
+              userData.email, parentName, childName,
+              vaccData.vaccineName, vaccData.dose, dueDate
+            );
+          }
+
+          if (prefs.reminderMethod === "sms" || prefs.reminderMethod === "both") {
+            smsResult = await sendReminderSMS(
+              userData.contactNumber, parentName, childName,
+              vaccData.vaccineName, vaccData.dose, dueDate
+            );
+          }
+
+          const anySent = emailResult.sent || smsResult.sent;
+          const reasons = [emailResult.reason, smsResult.reason].filter(Boolean).join("; ");
+
+          await db.collection("reminderLogs").add({
+            userId,
+            childId: childDoc.id,
+            childName,
+            vaccinationId: vaccDoc.id,
+            vaccineName: vaccData.vaccineName,
+            dose: vaccData.dose,
+            dueDate,
+            method: prefs.reminderMethod,
+            status: anySent ? "sent" : "failed",
+            reason: reasons || null,
+            sentDate: today,
+            sentAt: Date.now(),
+          });
+
+          remindersSent++;
+          console.log(`[Reminder] Processed ${vaccData.vaccineName} for ${childName} → ${userData.email}`);
+        }
+      }
+    }
+  }
+
+  console.log(`[Reminder] Complete. ${remindersSent} reminders processed.`);
+  return remindersSent;
+}
+
 // POST /api/reminders/check - Check and send reminders for all parents (cron-like endpoint)
 app.post("/api/reminders/check", async (req, res) => {
   // Optional: protect with a secret key for cron jobs
@@ -1343,102 +1831,7 @@ app.post("/api/reminders/check", async (req, res) => {
   }
 
   try {
-    const now = Date.now();
-    let remindersSent = 0;
-
-    console.log("Starting reminder check at", new Date());
-
-    // Get all parents
-    const usersSnapshot = await db.collection("users").where("role", "==", "parent").get();
-    console.log(`Found ${usersSnapshot.size} parent accounts`);
-
-    for (const userDoc of usersSnapshot.docs) {
-      const userId = userDoc.id;
-      const userData = userDoc.data();
-
-      // Get preferences
-      const prefDoc = await db.collection("preferences").doc(userId).get();
-      const prefs = prefDoc.exists ? prefDoc.data() : { reminderMethod: "both", reminderDaysBefore: 7 };
-
-      // Get all children for this parent
-      const childrenSnapshot = await db.collection("children").where("parentId", "==", userId).get();
-      console.log(`Parent ${userId} has ${childrenSnapshot.size} children`);
-
-      for (const childDoc of childrenSnapshot.docs) {
-        const childData = childDoc.data();
-        const childName = `${childData.firstName} ${childData.lastName}`;
-
-        // Get all vaccinations for this child
-        const vaccSnapshot = await db
-          .collection("children")
-          .doc(childDoc.id)
-          .collection("vaccinations")
-          .get();
-
-        for (const vaccDoc of vaccSnapshot.docs) {
-          const vaccData = vaccDoc.data();
-          
-          // Skip administered vaccinations
-          if (vaccData.type === "administered") continue;
-          
-          const dueDate = typeof vaccData.dueDate === "number" ? vaccData.dueDate : vaccData.dueDate?.seconds * 1000;
-          const daysUntilDue = Math.floor((dueDate - now) / (1000 * 60 * 60 * 24));
-
-          // Send reminder if due within the reminder window
-          if (daysUntilDue >= 0 && daysUntilDue <= prefs.reminderDaysBefore) {
-            // Check if reminder was already sent today
-            const today = new Date().toISOString().split("T")[0];
-            const existingReminder = await db
-              .collection("reminderLogs")
-              .where("userId", "==", userId)
-              .where("vaccinationId", "==", vaccDoc.id)
-              .where("sentDate", "==", today)
-              .limit(1)
-              .get();
-
-            if (!existingReminder.empty) continue; // Already sent today
-
-            const parentName = `${userData.firstName} ${userData.lastName}`;
-            let result = { sent: false };
-
-            // Send email reminder
-            if (prefs.reminderMethod === "email" || prefs.reminderMethod === "both") {
-              result = await sendReminderEmail(
-                userData.email, parentName, childName,
-                vaccData.vaccineName, vaccData.dose, dueDate
-              );
-            }
-
-            // SMS would go here (e.g., Twilio integration)
-            if (prefs.reminderMethod === "sms" || prefs.reminderMethod === "both") {
-              // Placeholder for SMS integration
-              console.log(`[SMS Placeholder] Would send SMS to ${userData.contactNumber} about ${vaccData.vaccineName}`);
-            }
-
-            // Log the reminder
-            await db.collection("reminderLogs").add({
-              userId,
-              childId: childDoc.id,
-              childName,
-              vaccinationId: vaccDoc.id,
-              vaccineName: vaccData.vaccineName,
-              dose: vaccData.dose,
-              dueDate,
-              method: prefs.reminderMethod,
-              status: result.sent ? "sent" : "failed",
-              reason: result.reason || null,
-              sentDate: today,
-              sentAt: Date.now(),
-            });
-
-            remindersSent++;
-            console.log(`Sent reminder for ${vaccData.vaccineName} to ${userData.email}`);
-          }
-        }
-      }
-    }
-
-    console.log(`Reminder check complete. ${remindersSent} reminders processed.`);
+    const remindersSent = await runReminderCheck();
     res.status(200).json({ message: `Reminder check complete. ${remindersSent} reminders processed.` });
   } catch (error) {
     console.error("Reminder check error:", error);
@@ -1487,4 +1880,16 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5502;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+
+  // ── Automated daily reminder check at 8:00 AM ──
+  cron.schedule("0 8 * * *", async () => {
+    console.log("[Cron] Daily reminder check triggered");
+    try {
+      const count = await runReminderCheck();
+      console.log(`[Cron] Daily reminder check done — ${count} reminders sent`);
+    } catch (err) {
+      console.error("[Cron] Daily reminder check failed:", err);
+    }
+  });
+  console.log("Automated reminder check scheduled daily at 8:00 AM");
 });

@@ -6,6 +6,7 @@
 <title>Staff Dashboard</title>
 
 <link rel="stylesheet" href="sidebar.css" />
+<link rel="stylesheet" href="toast.css" />
 
 <style>
   body {
@@ -258,6 +259,149 @@
     height: 18px;
   }
 
+  /* ── Filter dropdown ── */
+  .filter-wrap {
+    position: relative;
+  }
+
+  .filter-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+    z-index: 200;
+    min-width: 200px;
+    padding: 8px;
+  }
+  .filter-dropdown.open { display: block; }
+
+  .filter-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #334155;
+    cursor: pointer;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+  }
+  .filter-option:hover { background: #f8fafc; }
+  .filter-option.active { background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+  .filter-option svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+  .filter-btn.has-filter {
+    border-color: #1d4ed8;
+    color: #1d4ed8;
+    background: #eff6ff;
+  }
+
+  /* ── Vaccination info modal ── */
+  .vacc-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(10, 25, 50, 0.55);
+    backdrop-filter: blur(4px);
+    justify-content: center;
+    align-items: center;
+  }
+  .vacc-overlay.active { display: flex; }
+
+  .vacc-modal {
+    background: #fff;
+    border-radius: 18px;
+    width: 680px;
+    max-width: 95vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.22);
+    overflow: hidden;
+    animation: vaccPop 0.3s cubic-bezier(0.16,1,0.3,1);
+  }
+  @keyframes vaccPop {
+    from { opacity: 0; transform: scale(0.94) translateY(14px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .vacc-modal-head {
+    padding: 22px 24px 18px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .vacc-modal-head h2 { font-size: 17px; font-weight: 700; color: #0f172a; margin: 0; }
+  .vacc-modal-head p  { font-size: 13px; color: #64748b; margin: 4px 0 0; }
+
+  .vacc-close {
+    border: none;
+    background: #f1f5f9;
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    color: #64748b;
+    font-size: 18px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .vacc-close:hover { background: #e2e8f0; color: #0f172a; }
+
+  .vacc-tabs {
+    display: flex;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0 24px;
+  }
+  .vacc-tab {
+    padding: 12px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    background: none;
+    border-top: none; border-left: none; border-right: none;
+  }
+  .vacc-tab.active { color: #142e5c; border-bottom-color: #142e5c; }
+
+  .vacc-body { overflow-y: auto; padding: 20px 24px; flex: 1; }
+
+  .vacc-section { display: none; }
+  .vacc-section.active { display: block; }
+
+  .vacc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .vacc-table th {
+    background: #f8fafc;
+    padding: 10px 14px;
+    text-align: left;
+    color: #64748b;
+    font-weight: 600;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .vacc-table td {
+    padding: 12px 14px;
+    border-top: 1px solid #f1f5f9;
+    color: #334155;
+    vertical-align: top;
+  }
+  .vacc-table tr:hover td { background: #f8fafc; }
+
+  .badge.completed { background: #dcfce7; color: #166534; }
+  .badge.due-soon  { background: #fef9c3; color: #854d0e; }
+
+  .vacc-empty  { text-align: center; padding: 36px 0; color: #94a3b8; font-size: 13px; }
+  .vacc-loading{ text-align: center; padding: 36px 0; color: #94a3b8; font-size: 13px; }
+
   @media (max-width: 1100px) {
     .stats {
       grid-template-columns: repeat(2, minmax(180px, 1fr));
@@ -399,12 +543,32 @@
         <div class="search">
           <input id="searchInput" type="text" placeholder="Search child or vaccine..." />
         </div>
-        <button class="filter-btn" type="button">
+        <div class="filter-wrap">
+        <button class="filter-btn" type="button" id="filterBtn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M22 3H2l8 9v7l4 2v-9l8-9z"></path>
           </svg>
           Filter
         </button>
+        <div class="filter-dropdown" id="filterDropdown">
+          <button class="filter-option active" data-range="all">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle></svg>
+            All
+          </button>
+          <button class="filter-option" data-range="week">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+            This Week
+          </button>
+          <button class="filter-option" data-range="month">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+            This Month
+          </button>
+          <button class="filter-option" data-range="3months">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+            Next 3 Months
+          </button>
+        </div>
+      </div>
       </div>
 
       <div style="overflow-x: auto">
@@ -424,6 +588,28 @@
     </div>
   </div>
 
+  <!-- Vaccination Info Modal -->
+  <div class="vacc-overlay" id="vaccOverlay">
+    <div class="vacc-modal" role="dialog" aria-modal="true" aria-labelledby="vaccModalTitle">
+      <div class="vacc-modal-head">
+        <div>
+          <h2 id="vaccModalTitle">Vaccination Info</h2>
+          <p id="vaccModalSub"></p>
+        </div>
+        <button class="vacc-close" id="vaccClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="vacc-tabs">
+        <button class="vacc-tab active" data-tab="scheduled">Upcoming / Overdue</button>
+        <button class="vacc-tab" data-tab="administered">Vaccination History</button>
+      </div>
+      <div class="vacc-body">
+        <div class="vacc-section active" id="tabScheduled"></div>
+        <div class="vacc-section" id="tabAdministered"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="toast.js"></script>
   <script>
 const API_BASE_URL = "http://localhost:5502";
 let allVaccinations = [];
@@ -446,7 +632,6 @@ async function apiCall(endpoint, options = {}) {
 async function verifyStaffAccess() {
   const profile = await apiCall("/api/staff/profile");
   if (!profile) {
-    alert("Only staff accounts can access this page.");
     localStorage.clear();
     window.location.href = "login.html";
     return false;
@@ -498,17 +683,32 @@ function badge(status) {
   return '<span class="badge upcoming">Upcoming</span>';
 }
 
-let activeTab = "due";
+let activeTab    = "due";
+let activeFilter = "all";
+
+function inDateRange(timestamp, range) {
+  if (range === "all") return true;
+  const now = new Date(); now.setHours(0,0,0,0);
+  const due = new Date(timestamp);
+  const end = new Date(now);
+  if (range === "week")    end.setDate(end.getDate() + 7);
+  if (range === "month")   end.setMonth(end.getMonth() + 1);
+  if (range === "3months") end.setMonth(end.getMonth() + 3);
+  return due >= now && due <= end;
+}
 
 function render() {
   const q = (document.getElementById("searchInput").value || "").toLowerCase();
   const filtered = allVaccinations.filter(r => {
-    const matchesTab = r.status === activeTab;
+    const matchesTab   = r.status === activeTab;
     const matchesQuery = (r.childName + " " + r.vaccineName).toLowerCase().includes(q);
-    return matchesTab && matchesQuery;
+    const matchesDate  = activeTab === "overdue" ? true : inDateRange(r.dueDate, activeFilter);
+    return matchesTab && matchesQuery && matchesDate;
   });
 
-  document.getElementById("rows").innerHTML = filtered.map(r => `
+  document.getElementById("rows").innerHTML = filtered.length === 0
+    ? `<tr><td colspan="5" style="text-align:center;padding:32px;color:#94a3b8;font-size:13px;">No records found.</td></tr>`
+    : filtered.map(r => `
     <tr>
       <td class="name">${r.childName}</td>
       <td>${r.vaccineName} (${r.dose})</td>
@@ -516,7 +716,8 @@ function render() {
       <td>${badge(r.status)}</td>
       <td style="text-align: right">
         <div class="actions" style="justify-content:flex-end;">
-          <button class="icon-btn" title="View" type="button">
+          <button class="icon-btn" title="View Vaccination Info" type="button"
+              onclick="openVaccModal('${r.childId}', '${r.childName.replace(/'/g, "\\'")}')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
               <circle cx="12" cy="12" r="3"></circle>
@@ -526,6 +727,88 @@ function render() {
       </td>
     </tr>
   `).join("");
+}
+
+// ── Filter dropdown ──
+const filterBtn      = document.getElementById("filterBtn");
+const filterDropdown = document.getElementById("filterDropdown");
+
+filterBtn.addEventListener("click", e => {
+  e.stopPropagation();
+  filterDropdown.classList.toggle("open");
+});
+document.addEventListener("click", () => filterDropdown.classList.remove("open"));
+
+filterDropdown.querySelectorAll(".filter-option").forEach(opt => {
+  opt.addEventListener("click", e => {
+    e.stopPropagation();
+    activeFilter = opt.dataset.range;
+    filterDropdown.querySelectorAll(".filter-option").forEach(o => o.classList.remove("active"));
+    opt.classList.add("active");
+    const isFiltered = activeFilter !== "all";
+    filterBtn.classList.toggle("has-filter", isFiltered);
+    const label = isFiltered ? opt.textContent.trim() : "Filter";
+    filterBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9v7l4 2v-9l8-9z"></path></svg> ${label}`;
+    filterDropdown.classList.remove("open");
+    render();
+  });
+});
+
+// ── Vaccination Info Modal ──
+const vaccOverlay = document.getElementById("vaccOverlay");
+const vaccClose   = document.getElementById("vaccClose");
+
+vaccClose.addEventListener("click", () => vaccOverlay.classList.remove("active"));
+vaccOverlay.addEventListener("click", e => { if (e.target === vaccOverlay) vaccOverlay.classList.remove("active"); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && vaccOverlay.classList.contains("active")) vaccOverlay.classList.remove("active"); });
+
+vaccOverlay.querySelectorAll(".vacc-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    vaccOverlay.querySelectorAll(".vacc-tab").forEach(t => t.classList.remove("active"));
+    vaccOverlay.querySelectorAll(".vacc-section").forEach(s => s.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById(tab.dataset.tab === "scheduled" ? "tabScheduled" : "tabAdministered").classList.add("active");
+  });
+});
+
+async function openVaccModal(childId, childName) {
+  document.getElementById("vaccModalTitle").textContent = childName;
+  document.getElementById("vaccModalSub").textContent = "Loading…";
+  document.getElementById("tabScheduled").innerHTML = '<div class="vacc-loading">Loading&#8230;</div>';
+  document.getElementById("tabAdministered").innerHTML = "";
+
+  vaccOverlay.querySelectorAll(".vacc-tab").forEach(t => t.classList.remove("active"));
+  vaccOverlay.querySelectorAll(".vacc-section").forEach(s => s.classList.remove("active"));
+  vaccOverlay.querySelector(".vacc-tab[data-tab='scheduled']").classList.add("active");
+  document.getElementById("tabScheduled").classList.add("active");
+  vaccOverlay.classList.add("active");
+
+  const data = await apiCall(`/api/staff/children/${childId}/vaccinations`);
+  if (!data) {
+    document.getElementById("tabScheduled").innerHTML = '<div class="vacc-empty">Failed to load vaccination data.</div>';
+    return;
+  }
+
+  const { scheduled, administered } = data;
+  document.getElementById("vaccModalSub").textContent =
+    `${administered.length} administered · ${scheduled.filter(v => v.status === "overdue").length} overdue · ${scheduled.filter(v => v.status !== "overdue").length} upcoming`;
+
+  const statusBadge = s =>
+    s === "overdue"  ? '<span class="badge overdue">Overdue</span>'  :
+    s === "due-soon" ? '<span class="badge due-soon">Due Soon</span>' :
+                       '<span class="badge upcoming">Upcoming</span>';
+
+  document.getElementById("tabScheduled").innerHTML = scheduled.length === 0
+    ? '<div class="vacc-empty">No upcoming or overdue vaccines.</div>'
+    : `<table class="vacc-table"><thead><tr><th>Vaccine</th><th>Dose</th><th>Due Date</th><th>Status</th></tr></thead><tbody>
+        ${scheduled.map(v => `<tr><td>${v.vaccineName}</td><td>${v.dose||"—"}</td><td>${formatDate(v.dueDate)}</td><td>${statusBadge(v.status)}</td></tr>`).join("")}
+      </tbody></table>`;
+
+  document.getElementById("tabAdministered").innerHTML = administered.length === 0
+    ? '<div class="vacc-empty">No vaccines have been administered yet.</div>'
+    : `<table class="vacc-table"><thead><tr><th>Vaccine</th><th>Dose</th><th>Date Given</th><th>Given By</th><th>Notes</th></tr></thead><tbody>
+        ${administered.map(v => `<tr><td>${v.vaccineName}</td><td>${v.dose||"—"}</td><td>${v.administeredDate ? formatDate(v.administeredDate) : "—"}</td><td>${v.administeredBy||"—"}</td><td>${v.notes||"—"}</td></tr>`).join("")}
+      </tbody></table>`;
 }
 
 async function initializePage() {

@@ -374,34 +374,7 @@ input.invalid {
         <input type="checkbox" id="rememberMe" name="rememberMe">
         <span>Remember me</span>
       </label>
-      <a href="#" id="forgotBtn" style="position:relative;">Forgot password?
-  <span id="forgotPopover" style="
-    display:none;
-    position:absolute;
-    bottom:calc(100% + 10px);
-    right:0;
-    background:#1e293b;
-    color:white;
-    padding:10px 14px;
-    border-radius:10px;
-    font-size:12px;
-    white-space:nowrap;
-    box-shadow:0 8px 20px rgba(0,0,0,0.2);
-    z-index:999;
-    font-weight:400;
-  ">
-    Contact admin: <strong>vaxalertsupport@gmail.com</strong>
-    <span style="
-      position:absolute;
-      bottom:-6px;
-      right:16px;
-      width:12px;
-      height:12px;
-      background:#1e293b;
-      transform:rotate(45deg);
-    "></span>
-  </span>
-</a>
+      <a href="#" id="forgotBtn">Forgot password?</a>
     </div>
 
     <button type="submit" class="btn" id="loginBtn">Login →</button>
@@ -412,6 +385,26 @@ input.invalid {
     <a href="register.html">Create Account</a>
   </div>
 
+</div>
+
+<!-- ─── Forgot Password Modal ─── -->
+<div class="modal-overlay" id="forgotModal" role="dialog" aria-modal="true" aria-labelledby="forgotModalTitle">
+  <div class="modal-card">
+    <div class="modal-icon" style="background: linear-gradient(135deg, #142e5c 0%, #1e3a6e 100%);">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+      </svg>
+    </div>
+    <h2 class="modal-title" id="forgotModalTitle">Reset Password</h2>
+    <p class="modal-body">Enter the email address associated with your account. We'll send you a link to reset your password.</p>
+    <div style="text-align:left; margin-bottom:16px;">
+      <label for="forgotEmail" style="display:block; font-size:13px; margin-bottom:6px; color:#334155;">Email Address</label>
+      <input type="email" id="forgotEmail" placeholder="maria.reyes@example.com" required style="width:100%; padding:12px; border-radius:8px; border:1px solid #cbd5e1; font-size:14px;">
+    </div>
+    <div id="forgotMessage" style="display:none; font-size:13px; padding:10px 12px; border-radius:8px; margin-bottom:12px;"></div>
+    <button type="button" class="modal-btn" id="sendResetBtn">Send Reset Link</button>
+    <button type="button" class="modal-btn secondary" id="forgotCloseBtn">Cancel</button>
+  </div>
 </div>
 
 <!-- ─── Email Not Verified Modal ─── -->
@@ -440,6 +433,7 @@ import {
   getAuth, 
   signInWithEmailAndPassword,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
@@ -687,22 +681,102 @@ if (urlParams.get("error")) {
   showMessage(errorMap[urlParams.get("error")] || "An error occurred.", true);
   window.history.replaceState({}, document.title, window.location.pathname);
 }
-</script>
-<script>
-  const forgotBtn = document.getElementById("forgotBtn");
-  const forgotPopover = document.getElementById("forgotPopover");
 
-  forgotBtn.addEventListener("click", function(e) {
-    e.preventDefault();
-    const isVisible = forgotPopover.style.display === "block";
-    forgotPopover.style.display = isVisible ? "none" : "block";
-  });
+// ─── Forgot Password Logic ───
+const forgotBtn = document.getElementById("forgotBtn");
+const forgotModal = document.getElementById("forgotModal");
+const forgotCloseBtn = document.getElementById("forgotCloseBtn");
+const sendResetBtn = document.getElementById("sendResetBtn");
+const forgotEmailInput = document.getElementById("forgotEmail");
+const forgotMessage = document.getElementById("forgotMessage");
 
-  document.addEventListener("click", function(e) {
-    if (!forgotBtn.contains(e.target)) {
-      forgotPopover.style.display = "none";
+function showForgotMsg(text, isError) {
+  forgotMessage.textContent = text;
+  forgotMessage.style.display = "block";
+  if (isError) {
+    forgotMessage.style.color = "#b91c1c";
+    forgotMessage.style.background = "#fef2f2";
+    forgotMessage.style.border = "1px solid #fecaca";
+  } else {
+    forgotMessage.style.color = "#166534";
+    forgotMessage.style.background = "#f0fdf4";
+    forgotMessage.style.border = "1px solid #bbf7d0";
+  }
+}
+
+function openForgotModal() {
+  // Pre-fill with login email if available
+  const loginEmail = document.getElementById("email");
+  if (loginEmail && loginEmail.value.trim()) {
+    forgotEmailInput.value = loginEmail.value.trim();
+  }
+  forgotMessage.style.display = "none";
+  sendResetBtn.disabled = false;
+  sendResetBtn.textContent = "Send Reset Link";
+  forgotModal.classList.add("active");
+  forgotEmailInput.focus();
+}
+
+function closeForgotModal() {
+  forgotModal.classList.remove("active");
+}
+
+forgotBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  openForgotModal();
+});
+
+forgotCloseBtn.addEventListener("click", closeForgotModal);
+
+forgotModal.addEventListener("click", (e) => {
+  if (e.target === forgotModal) closeForgotModal();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && forgotModal.classList.contains("active")) closeForgotModal();
+});
+
+sendResetBtn.addEventListener("click", async () => {
+  const email = forgotEmailInput.value.trim();
+  if (!email) {
+    showForgotMsg("Please enter your email address.", true);
+    return;
+  }
+
+  sendResetBtn.disabled = true;
+  sendResetBtn.textContent = "Sending…";
+
+  try {
+    await sendPasswordResetEmail(auth, email);
+    showForgotMsg("Password reset email sent! Check your inbox (and spam folder).", false);
+    sendResetBtn.textContent = "Email Sent ✓";
+
+    // Cooldown before allowing re-send
+    let seconds = 30;
+    const timer = setInterval(() => {
+      seconds--;
+      sendResetBtn.textContent = `Resend in ${seconds}s`;
+      if (seconds <= 0) {
+        clearInterval(timer);
+        sendResetBtn.textContent = "Send Reset Link";
+        sendResetBtn.disabled = false;
+      }
+    }, 1000);
+  } catch (error) {
+    const code = error.code;
+    if (code === "auth/user-not-found") {
+      showForgotMsg("No account found with that email address.", true);
+    } else if (code === "auth/invalid-email") {
+      showForgotMsg("Please enter a valid email address.", true);
+    } else if (code === "auth/too-many-requests") {
+      showForgotMsg("Too many requests. Please try again later.", true);
+    } else {
+      showForgotMsg("Failed to send reset email. Please try again.", true);
     }
-  });
+    sendResetBtn.disabled = false;
+    sendResetBtn.textContent = "Send Reset Link";
+  }
+});
 </script>
 </body>
 </html>

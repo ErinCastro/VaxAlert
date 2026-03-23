@@ -6,6 +6,7 @@
 <title>Reminder Logs</title>
 
 <link rel="stylesheet" href="sidebar.css" />
+<link rel="stylesheet" href="toast.css" />
 
 <style>
   body {
@@ -91,6 +92,12 @@
     height: 16px;
   }
 
+  .filter-btn.has-filter {
+    border-color: #1d4ed8;
+    color: #1d4ed8;
+    background: #eff6ff;
+  }
+
   table {
     width: 100%;
     border-collapse: collapse;
@@ -172,7 +179,43 @@
     width: 18px;
     height: 18px;
   }
-
+  /* ── Detail modal ── */
+  .detail-overlay {
+    display: none; position: fixed; inset: 0; z-index: 1000;
+    background: rgba(10, 25, 50, 0.55); backdrop-filter: blur(4px);
+    justify-content: center; align-items: center;
+  }
+  .detail-overlay.active { display: flex; }
+  .detail-modal {
+    background: #fff; border-radius: 18px; width: 480px;
+    max-width: 95vw; max-height: 85vh; display: flex;
+    flex-direction: column; box-shadow: 0 24px 64px rgba(0,0,0,0.22);
+    overflow: hidden; animation: detailPop 0.3s cubic-bezier(0.16,1,0.3,1);
+  }
+  @keyframes detailPop {
+    from { opacity: 0; transform: scale(0.94) translateY(14px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .detail-head {
+    padding: 22px 24px 18px; border-bottom: 1px solid #e2e8f0;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  }
+  .detail-head h2 { font-size: 17px; font-weight: 700; color: #0f172a; margin: 0; }
+  .detail-head p  { font-size: 13px; color: #64748b; margin: 4px 0 0; }
+  .detail-close {
+    border: none; background: #f1f5f9; border-radius: 8px;
+    padding: 6px 10px; cursor: pointer; color: #64748b;
+    font-size: 18px; line-height: 1; flex-shrink: 0;
+  }
+  .detail-close:hover { background: #e2e8f0; color: #0f172a; }
+  .detail-body { padding: 20px 24px; overflow-y: auto; }
+  .detail-row {
+    display: flex; justify-content: space-between; padding: 10px 0;
+    border-bottom: 1px solid #f1f5f9; font-size: 13px;
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-label { color: #64748b; font-weight: 600; }
+  .detail-value { color: #0f172a; text-align: right; max-width: 60%; }
   @media (max-width: 720px) {
     body {
       flex-direction: column;
@@ -266,9 +309,25 @@
     </div>
   </div>
 
+  <!-- Detail Modal -->
+  <div class="detail-overlay" id="detailOverlay">
+    <div class="detail-modal" role="dialog" aria-modal="true">
+      <div class="detail-head">
+        <div>
+          <h2 id="detailTitle">Reminder Details</h2>
+          <p id="detailSub"></p>
+        </div>
+        <button class="detail-close" id="detailClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="detail-body" id="detailBody"></div>
+    </div>
+  </div>
+
+  <script src="toast.js"></script>
   <script>
 const API_BASE_URL = "http://localhost:5502";
 let allLogs = [];
+let filteredLogs = [];
 let activeStatus = "all";
 
 function getAuthToken() { return localStorage.getItem("idToken"); }
@@ -288,7 +347,6 @@ async function apiCall(endpoint, options = {}) {
 async function verifyStaffAccess() {
   const profile = await apiCall("/api/staff/profile");
   if (!profile) {
-    alert("Only staff accounts can access this page.");
     localStorage.clear();
     window.location.href = "login.html";
     return false;
@@ -333,13 +391,13 @@ function statusPill(st) {
 
 function render() {
   const q = (document.getElementById("searchInput").value || "").toLowerCase();
-  const filtered = allLogs.filter(r => {
+  filteredLogs = allLogs.filter(r => {
     const matchesText = (r.sentAt + " " + r.childName + " " + r.method + " " + r.status).toLowerCase().includes(q);
     const matchesStatus = activeStatus === "all" ? true : r.status === activeStatus;
     return matchesText && matchesStatus;
   });
 
-  document.getElementById("rows").innerHTML = filtered.map(r => `
+  document.getElementById("rows").innerHTML = filteredLogs.map((r, i) => `
     <tr>
       <td>${formatDate(r.sentAt)}</td>
       <td class="child">${r.childName}</td>
@@ -348,7 +406,7 @@ function render() {
       <td>${statusPill(r.status)}</td>
       <td style="text-align:right;">
         <div class="actions">
-          <button class="icon-btn" type="button" title="View">
+          <button class="icon-btn" type="button" title="View" onclick="openDetail(${i})">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
               <circle cx="12" cy="12" r="3"></circle>
@@ -358,6 +416,41 @@ function render() {
       </td>
     </tr>
   `).join("");
+}
+
+// ── Detail modal ──
+const detailOverlay = document.getElementById("detailOverlay");
+document.getElementById("detailClose").addEventListener("click", () => detailOverlay.classList.remove("active"));
+detailOverlay.addEventListener("click", e => { if (e.target === detailOverlay) detailOverlay.classList.remove("active"); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && detailOverlay.classList.contains("active")) detailOverlay.classList.remove("active"); });
+
+function formatDateShort(ts) {
+  if (!ts) return "N/A";
+  const d = new Date(typeof ts === "number" ? ts : ts.seconds * 1000);
+  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
+function openDetail(idx) {
+  const r = filteredLogs[idx];
+  if (!r) return;
+
+  document.getElementById("detailTitle").textContent = r.childName || "Reminder Details";
+  document.getElementById("detailSub").textContent = "Reminder Log Entry";
+
+  let html = "";
+  const row = (label, value) => `<div class="detail-row"><span class="detail-label">${label}</span><span class="detail-value">${value || "—"}</span></div>`;
+
+  html += row("Child", r.childName);
+  html += row("Vaccine", r.vaccineName ? `${r.vaccineName} (${r.dose || ""})` : "Vaccination reminder");
+  html += row("Due Date", formatDateShort(r.dueDate));
+  html += row("Channel", r.method === "sms" ? "SMS" : r.method === "email" ? "Email" : r.method || "—");
+  html += row("Status", `<span class="pill ${r.status}">${r.status === "sent" ? "Sent" : r.status === "failed" ? "Failed" : "Pending"}</span>`);
+  html += row("Sent At", formatDate(r.sentAt));
+  html += row("Type", r.type === "test" ? "Test" : "Automated");
+  if (r.reason) html += row("Reason", r.reason);
+
+  document.getElementById("detailBody").innerHTML = html;
+  detailOverlay.classList.add("active");
 }
 
 async function initializePage() {
@@ -373,6 +466,11 @@ document.getElementById("searchInput").addEventListener("input", render);
 document.getElementById("filterBtn").addEventListener("click", () => {
   const next = activeStatus === "all" ? "sent" : activeStatus === "sent" ? "failed" : activeStatus === "failed" ? "pending" : "all";
   activeStatus = next;
+  const btn = document.getElementById("filterBtn");
+  const isFiltered = activeStatus !== "all";
+  const label = isFiltered ? activeStatus.charAt(0).toUpperCase() + activeStatus.slice(1) : "Filter Status";
+  btn.classList.toggle("has-filter", isFiltered);
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9v7l4 2v-9l8-9z"></path></svg> ${label}`;
   render();
 });
 

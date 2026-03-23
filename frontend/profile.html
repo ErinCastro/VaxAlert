@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Profile Settings</title>
 
+<link rel="stylesheet" href="toast.css" />
+
 <style>
 body {
   margin: 0;
@@ -146,26 +148,6 @@ input:disabled { background: #f1f5f9; color: #64748b; }
 
 .btn:hover { background: #0f2448; }
 
-.form-msg {
-  font-size: 13px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  margin-bottom: 12px;
-  display: none;
-}
-
-.form-msg.success {
-  background: #f0fdf4;
-  color: #166534;
-  border: 1px solid #bbf7d0;
-}
-
-.form-msg.error {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
-}
-
 .field-hint {
   font-size: 11px;
   color: #64748b;
@@ -223,7 +205,7 @@ input:disabled { background: #f1f5f9; color: #64748b; }
       Parent Account
     </p>
 
-    <div id="profileMsg" class="form-msg"></div>
+    <div id="profileMsg" class="vax-form-msg"></div>
 
     <label>First Name</label>
     <input type="text" id="firstName">
@@ -236,7 +218,8 @@ input:disabled { background: #f1f5f9; color: #64748b; }
     <div class="field-hint">Email cannot be changed for security reasons</div>
 
     <label>Contact Number</label>
-    <input type="text" id="contactNumber">
+    <input type="tel" id="contactNumber" placeholder="+639XXXXXXXXX">
+    <div class="field-hint">Philippine mobile: +639XXXXXXXXX</div>
 
     <button class="btn" onclick="saveProfileChanges()">Save Changes</button>
   </div>
@@ -247,7 +230,7 @@ input:disabled { background: #f1f5f9; color: #64748b; }
       Update your password
     </p>
 
-    <div id="passwordMsg" class="form-msg"></div>
+    <div id="passwordMsg" class="vax-form-msg"></div>
 
     <label>New Password</label>
     <input type="password" id="newPassword">
@@ -259,6 +242,7 @@ input:disabled { background: #f1f5f9; color: #64748b; }
   </div>
 </div>
 
+<script src="toast.js"></script>
 <script>
 const API_BASE_URL = "http://localhost:5502";
 
@@ -292,7 +276,8 @@ async function apiCall(endpoint, options = {}) {
     }
 
     if (!response.ok) {
-      return { _error: true };
+      const errData = await response.json().catch(() => ({}));
+      return { _error: true, error: errData.error || "Failed to update profile." };
     }
 
     return await response.json();
@@ -303,11 +288,98 @@ async function apiCall(endpoint, options = {}) {
 }
 
 function showMsg(id, text, isError) {
-  const el = document.getElementById(id);
-  el.textContent = text;
-  el.className = `form-msg ${isError ? "error" : "success"}`;
-  el.style.display = "block";
-  setTimeout(() => { el.style.display = "none"; }, 4000);
+  vaxFormMsg(id, text, isError);
+}
+
+async function saveProfileChanges() {
+  const firstName = document.getElementById("firstName").value.trim();
+  const lastName  = document.getElementById("lastName").value.trim();
+  const contactNumber = document.getElementById("contactNumber").value.trim();
+
+  if (!firstName || !lastName || !contactNumber) {
+    showMsg("profileMsg", "Please fill in all fields.", true);
+    return;
+  }
+
+  // Validate phone format
+  let phone = contactNumber.replace(/[\s\-().]/g, "");
+  if (phone.startsWith("+")) phone = phone.slice(1);
+  if (phone.startsWith("630") && phone.length === 13) phone = "63" + phone.slice(3);
+  if (phone.startsWith("0") && phone.length === 11) phone = "63" + phone.slice(1);
+  if (phone.startsWith("9") && phone.length === 10) phone = "63" + phone;
+  if (!/^63\d{10}$/.test(phone)) {
+    showMsg("profileMsg", "Invalid phone number. Use format: +639XXXXXXXXX", true);
+    return;
+  }
+
+  const btn = document.querySelector("#profileCard .btn");
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+
+  const result = await apiCall("/api/parent/update-profile", {
+    method: "PUT",
+    body: JSON.stringify({ firstName, lastName, contactNumber }),
+  });
+
+  btn.disabled = false;
+  btn.textContent = origText;
+
+  if (result && !result._error && !result.error) {
+    showMsg("profileMsg", "Profile updated successfully!", false);
+    const fullName = `${firstName} ${lastName}`;
+    document.getElementById("sidebarName").textContent = fullName;
+    document.getElementById("profileFullName").textContent = fullName;
+  } else {
+    showMsg("profileMsg", result?.error || "Failed to update profile.", true);
+  }
+}
+
+async function changePassword() {
+  const newPassword     = document.getElementById("newPassword").value;
+  const confirmPassword = document.getElementById("confirmPassword").value;
+
+  if (!newPassword || !confirmPassword) {
+    showMsg("passwordMsg", "Please fill in both password fields.", true);
+    return;
+  }
+  if (newPassword.length < 8) {
+    showMsg("passwordMsg", "Password must be at least 8 characters.", true);
+    return;
+  }
+  if (!/\d/.test(newPassword)) {
+    showMsg("passwordMsg", "Password must include at least one number.", true);
+    return;
+  }
+  if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword)) {
+    showMsg("passwordMsg", "Password must include at least one symbol.", true);
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    showMsg("passwordMsg", "Passwords do not match.", true);
+    return;
+  }
+
+  const btn = document.querySelector("#securityCard .btn");
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Updating…";
+
+  const result = await apiCall("/api/auth/change-password", {
+    method: "PUT",
+    body: JSON.stringify({ newPassword }),
+  });
+
+  btn.disabled = false;
+  btn.textContent = origText;
+
+  if (result && !result._error && !result.error) {
+    showMsg("passwordMsg", "Password updated successfully!", false);
+    document.getElementById("newPassword").value = "";
+    document.getElementById("confirmPassword").value = "";
+  } else {
+    showMsg("passwordMsg", result?.error || "Failed to update password.", true);
+  }
 }
 
 async function loadProfile() {

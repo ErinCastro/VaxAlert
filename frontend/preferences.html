@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Preferences</title>
 
+<link rel="stylesheet" href="toast.css" />
+
 <style>
 body {
   margin: 0;
@@ -263,6 +265,109 @@ h1 { font-size: 24px; color: #1e293b; }
 .btn-danger:hover {
   background: #fecaca;
 }
+/* ── delete confirmation modal ─────────────────── */
+.confirm-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #fee2e2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 18px;
+}
+
+.confirm-icon svg {
+  width: 32px;
+  height: 32px;
+  stroke: #dc2626;
+  stroke-width: 2;
+}
+
+.confirm-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.confirm-sub {
+  font-size: 13px;
+  color: #64748b;
+  text-align: center;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.confirm-sub strong {
+  color: #1e293b;
+}
+
+.btn-confirm-delete {
+  background: #dc2626;
+  color: #fff;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.btn-confirm-delete:hover { background: #b91c1c; }
+.btn-confirm-delete:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ── reminder option cards ────────────── */
+.option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.option:hover { background: #f8fafc; }
+.option.active {
+  border-color: #142e5c;
+  background: #f0f4fa;
+}
+.option input[type="radio"] {
+  accent-color: #142e5c;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+.option-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1e293b;
+}
+.option-desc {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* test reminder button */
+.btn-test {
+  background: #f0f4fa;
+  color: #142e5c;
+  border: 1px solid #142e5c;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.2s;
+  margin-left: 12px;
+}
+.btn-test:hover { background: #e0e7f1; }
+.btn-test:disabled { opacity: 0.6; cursor: not-allowed; }
 /* (Everything else from your original CSS stays unchanged below this line) */
 </style>
 </head>
@@ -297,10 +402,6 @@ h1 { font-size: 24px; color: #1e293b; }
 
 </div>
 
-<div class="main">
-  <!-- KEEP ALL YOUR EXISTING MAIN CONTENT HERE EXACTLY AS IS -->
-</div>
-
 
 <div class="main">
   <h1>Preferences</h1>
@@ -316,7 +417,7 @@ h1 { font-size: 24px; color: #1e293b; }
 
     <div style="margin-top:16px; border-top:1px solid #e2e8f0; padding-top:16px;">
       <h4 style="margin-bottom:12px; color:#334155;">Add a Child</h4>
-      <div id="addChildMsg" class="form-msg"></div>
+      <div id="addChildMsg" class="vax-form-msg"></div>
       <div style="display:flex; gap:12px;">
         <div style="flex:1;"><label>First Name</label><input type="text" id="childFirstName" placeholder="Juan"></div>
         <div style="flex:1;"><label>Last Name</label><input type="text" id="childLastName" placeholder="Reyes"></div>
@@ -340,7 +441,7 @@ h1 { font-size: 24px; color: #1e293b; }
     <h3>Reminder Preferences</h3>
     <p style="font-size:13px; color:#64748b; margin-bottom:16px;">Choose how you want to receive vaccination alerts</p>
 
-    <div id="prefsMsg" class="form-msg"></div>
+    <div id="prefsMsg" class="vax-form-msg"></div>
 
     <div class="option" data-value="sms" onclick="selectMethod(this)">
       <input type="radio" name="reminderMethod" value="sms">
@@ -377,6 +478,8 @@ h1 { font-size: 24px; color: #1e293b; }
     </div>
 
     <button class="btn" onclick="savePreferences()">Save Preferences</button>
+    <button class="btn-test" id="testReminderBtn" onclick="sendTestReminder()">🔔 Send Test Reminder</button>
+    <div id="testReminderMsg" class="vax-form-msg" style="margin-top:14px;"></div>
   </div>
 
   <!-- Reminder Logs -->
@@ -391,7 +494,7 @@ h1 { font-size: 24px; color: #1e293b; }
   <div id="editChildModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">Edit Child</div>
-      <div id="editChildMsg" class="form-msg"></div>
+      <div id="editChildMsg" class="vax-form-msg"></div>
       <div style="display:flex; gap:12px;">
         <div style="flex:1;"><label>First Name</label><input type="text" id="editChildFirstName" placeholder="Juan"></div>
         <div style="flex:1;"><label>Last Name</label><input type="text" id="editChildLastName" placeholder="Reyes"></div>
@@ -412,8 +515,31 @@ h1 { font-size: 24px; color: #1e293b; }
       </div>
     </div>
   </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="deleteModal" class="modal">
+    <div class="modal-content" style="max-width:400px; text-align:center;">
+      <div class="confirm-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+          <path d="M10 11v6"></path>
+          <path d="M14 11v6"></path>
+          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+        </svg>
+      </div>
+      <div class="confirm-title">Remove Child?</div>
+      <div class="confirm-sub">You are about to remove <strong id="deleteChildName"></strong>.<br>This will also delete all their vaccination records.</div>
+      <div id="deleteError" style="font-size:12px; color:#dc2626; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:9px 12px; margin-bottom:12px; display:none;"></div>
+      <div class="modal-buttons" style="justify-content:center;">
+        <button class="btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn-confirm-delete" id="confirmDeleteBtn" onclick="confirmDeleteChild()">Remove</button>
+      </div>
+    </div>
+  </div>
 </div>
 
+<script src="toast.js"></script>
 <script>
 const API_BASE_URL = "http://localhost:5502";
 
@@ -438,11 +564,7 @@ function formatDate(timestamp) {
 }
 
 function showMsg(id, text, isError) {
-  const el = document.getElementById(id);
-  el.textContent = text;
-  el.className = `form-msg ${isError ? 'error' : 'success'}`;
-  el.style.display = "block";
-  setTimeout(() => { el.style.display = "none"; }, 4000);
+  vaxFormMsg(id, text, isError);
 }
 
 // ─── Children ───
@@ -459,14 +581,20 @@ async function loadChildren() {
   children.forEach(child => {
     const div = document.createElement("div");
     div.className = "child-item";
+    const safeFirst = (child.firstName || "").replace(/'/g, "\\'");
+    const safeLast  = (child.lastName  || "").replace(/'/g, "\\'");
+    const safeBirth = child.birthDate
+      ? new Date(typeof child.birthDate === 'number' ? child.birthDate : child.birthDate.seconds * 1000).toISOString().split('T')[0]
+      : '';
+    const safeSex   = (child.sex || "").replace(/'/g, "\\'");
     div.innerHTML = `
       <div class="child-info">
         <strong>${child.firstName} ${child.lastName}</strong><br>
         <span>Born: ${formatDate(child.birthDate)} · ${child.sex || "N/A"} · Age: ${child.age !== null ? child.age : 'N/A'}</span>
       </div>
       <div style="display:flex; gap:8px;">
-        <button class="btn-outline" style="padding:6px 12px; font-size:13px;" onclick="openEditModal('${child.id}', '${child.firstName}', '${child.lastName}', '${child.birthDate}', '${child.sex}')">Edit</button>
-        <button class="btn-danger" onclick="removeChild('${child.id}', '${child.firstName}')">Remove</button>
+        <button class="btn-outline" style="padding:6px 12px; font-size:13px;" onclick="openEditModal('${child.id}', '${safeFirst}', '${safeLast}', '${safeBirth}', '${safeSex}')">Edit</button>
+        <button class="btn-danger" onclick="handleRemoveChild('${child.id}', '${safeFirst}')">Remove</button>
       </div>
     `;
     list.appendChild(div);
@@ -500,14 +628,46 @@ async function addChild() {
   }
 }
 
-async function removeChild(childId, name) {
-  if (!confirm(`Remove ${name}? This will also delete their vaccination records.`)) return;
+let pendingDeleteId = null;
+let pendingDeleteName = null;
 
-  const result = await apiCall(`/api/parent/children/${childId}`, { method: "DELETE" });
+function handleRemoveChild(childId, name) {
+  pendingDeleteId = childId;
+  pendingDeleteName = name;
+  const nameEl = document.getElementById("deleteChildName");
+  if (nameEl) nameEl.textContent = name;
+  document.getElementById("confirmDeleteBtn").disabled = false;
+  document.getElementById("confirmDeleteBtn").textContent = "Remove";
+  const errEl = document.getElementById("deleteError");
+  if (errEl) { errEl.textContent = ""; errEl.style.display = "none"; }
+  document.getElementById("deleteModal").classList.add("show");
+}
+
+function closeDeleteModal() {
+  document.getElementById("deleteModal").classList.remove("show");
+  pendingDeleteId = null;
+  pendingDeleteName = null;
+}
+
+async function confirmDeleteChild() {
+  if (!pendingDeleteId) return;
+
+  const btn = document.getElementById("confirmDeleteBtn");
+  btn.disabled = true;
+  btn.textContent = "Removing…";
+
+  const result = await apiCall(`/api/parent/children/${pendingDeleteId}`, { method: "DELETE" });
+
+  btn.disabled = false;
+  btn.textContent = "Remove";
+
   if (result && !result._error) {
+    closeDeleteModal();
     loadChildren();
   } else {
-    alert("Failed to remove child.");
+    const msg = result?.error || "Failed to remove child. Please try again.";
+    const errEl = document.getElementById("deleteError");
+    if (errEl) { errEl.textContent = msg; errEl.style.display = "block"; }
   }
 }
 
@@ -517,17 +677,10 @@ function openEditModal(childId, firstName, lastName, birthDate, sex) {
   currentEditChildId = childId;
   document.getElementById("editChildFirstName").value = firstName;
   document.getElementById("editChildLastName").value = lastName;
-  
-  // Convert timestamp to date format if necessary
-  let dateStr = birthDate;
-  if (typeof birthDate === 'number' || (typeof birthDate === 'object' && birthDate.seconds)) {
-    const timestamp = typeof birthDate === 'number' ? birthDate : birthDate.seconds * 1000;
-    const date = new Date(timestamp);
-    dateStr = date.toISOString().split('T')[0];
-  }
-  document.getElementById("editChildBirthDate").value = dateStr;
+  document.getElementById("editChildBirthDate").value = birthDate;
   document.getElementById("editChildSex").value = sex;
-  document.getElementById("editChildMsg").style.display = "none";
+  const msgEl = document.getElementById("editChildMsg");
+  msgEl.className = 'vax-form-msg';
   document.getElementById("editChildModal").classList.add("show");
 }
 
@@ -612,6 +765,35 @@ async function savePreferences() {
   }
 }
 
+async function sendTestReminder() {
+  const btn = document.getElementById("testReminderBtn");
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+
+  const result = await apiCall("/api/parent/test-reminder", { method: "POST" });
+
+  btn.disabled = false;
+  btn.textContent = "🔔 Send Test Reminder";
+
+  if (result && !result._error && !result.error) {
+    const count = result.remindersSent || 0;
+    if (count === 0) {
+      vaxToast(result.message || "No upcoming vaccinations within your reminder window.", "warning", 5000);
+    } else {
+      vaxToast(result.message, "success", 5000);
+      // Show details if available
+      if (result.details && result.details.length > 0) {
+        const summary = result.details.map(d => `${d.child}: ${d.vaccine}`).join(", ");
+        showMsg("testReminderMsg", `Sent for: ${summary}`, false);
+      }
+      // Reload reminder logs to reflect new entries
+      try { await loadReminderLogs(); } catch (e) { /* ignore */ }
+    }
+  } else {
+    vaxToast(result?.error || "Failed to send test reminders.", "error");
+  }
+}
+
 // ─── Reminder Logs ───
 async function loadReminderLogs() {
   const logs = await apiCall("/api/parent/reminder-logs");
@@ -647,6 +829,10 @@ async function initializePage() {
   // Close modal when clicking outside
   document.getElementById("editChildModal").addEventListener("click", function(e) {
     if (e.target === this) closeEditModal();
+  });
+
+  document.getElementById("deleteModal").addEventListener("click", function(e) {
+    if (e.target === this) closeDeleteModal();
   });
 
   const profile = await apiCall("/api/parent/profile");

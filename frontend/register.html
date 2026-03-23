@@ -220,7 +220,8 @@ input.invalid { border-color: #b91c1c; }
 
     <div class="form-group">
       <label>Contact Number</label>
-      <input type="tel" name="contactNumber" placeholder="+63 900 000 0000" required>
+      <input type="tel" name="contactNumber" placeholder="+639XXXXXXXXX" required>
+      <small class="field-hint">Philippine mobile: +639XXXXXXXXX</small>
     </div>
 
     <div class="form-row">
@@ -373,6 +374,17 @@ registerForm.addEventListener("submit", async (e) => {
 
   if (!firstName || !lastName || !email || !contactNumber || !password) {
     showError("All fields are required.");
+    return;
+  }
+
+  // Validate phone format
+  let phone = contactNumber.replace(/[\s\-().]/g, "");
+  if (phone.startsWith("+")) phone = phone.slice(1);
+  if (phone.startsWith("630") && phone.length === 13) phone = "63" + phone.slice(3);
+  if (phone.startsWith("0") && phone.length === 11) phone = "63" + phone.slice(1);
+  if (phone.startsWith("9") && phone.length === 10) phone = "63" + phone;
+  if (!/^63\d{10}$/.test(phone)) {
+    showError("Invalid phone number. Use format: +639XXXXXXXXX");
     return;
   }
 

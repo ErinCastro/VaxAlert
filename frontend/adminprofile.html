@@ -6,6 +6,7 @@
 <title>Profile Settings</title>
 
 <link rel="stylesheet" href="sidebar.css" />
+<link rel="stylesheet" href="toast.css" />
 
 <style>
   body {
@@ -199,6 +200,23 @@
     height: 16px;
   }
 
+  .save-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+
+  .form-error {
+    font-size: 12px;
+    color: #ef4444;
+    display: none;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 9px 12px;
+    margin-top: 10px;
+  }
+  .form-error.show { display: block; }
+
   @media (max-width: 900px) {
     .grid-2 {
       grid-template-columns: 1fr;
@@ -319,6 +337,7 @@
             </div>
           </div>
 
+          <div id="formError" class="form-error"></div>
           <div class="footer">
             <button class="link-btn" type="button" id="cancelBtn">Cancel</button>
             <button class="save-btn" type="submit">
@@ -335,6 +354,21 @@
     </div>
   </div>
 
+  <!-- Success Modal -->
+  <div class="vax-success-overlay" id="successOverlay">
+    <div class="vax-success-card">
+      <div class="vax-success-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <div class="vax-success-title">Password Updated!</div>
+      <div class="vax-success-sub">Your password has been changed successfully.</div>
+      <button class="vax-success-btn" id="successOkBtn">Done</button>
+    </div>
+  </div>
+
+  <script src="toast.js"></script>
   <script>
 const API_BASE_URL = "http://localhost:5502";
 
@@ -355,7 +389,6 @@ async function apiCall(endpoint, options = {}) {
 async function verifyAdminAccess() {
   const profile = await apiCall("/api/admin/profile");
   if (!profile) {
-    alert("Only admin accounts can access this page.");
     localStorage.clear();
     window.location.href = "login.html";
     return false;
@@ -386,38 +419,82 @@ async function initializePage() {
 
 function logout() { localStorage.clear(); window.location.href = "login.html"; }
 
+function showFormError(msg) {
+  const el = document.getElementById("formError");
+  el.textContent = msg;
+  el.classList.add("show");
+}
+
+function clearFormError() {
+  document.getElementById("formError").classList.remove("show");
+}
+
+document.getElementById("successOkBtn").addEventListener("click", () => {
+  document.getElementById("successOverlay").classList.remove("open");
+});
+
+document.getElementById("successOverlay").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove("open");
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") document.getElementById("successOverlay").classList.remove("open");
+});
+
 document.getElementById("securityForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  
+  clearFormError();
+
   const currentPw = document.getElementById("currentPw").value;
   const newPw = document.getElementById("newPw").value;
   const confirmPw = document.getElementById("confirmPw").value;
-  
+
   if (!currentPw || !newPw || !confirmPw) {
-    alert("Please fill all fields");
+    showFormError("Please fill in all fields.");
     return;
   }
-  
+
+  if (newPw.length < 6) {
+    showFormError("New password must be at least 6 characters.");
+    return;
+  }
+
   if (newPw !== confirmPw) {
-    alert("Passwords do not match");
+    showFormError("Passwords do not match.");
     return;
   }
-  
+
+  const saveBtn = document.querySelector(".save-btn");
+  const origHTML = saveBtn.innerHTML;
+  saveBtn.disabled = true;
+  saveBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:16px;height:16px;animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving…`;
+
+  if (!document.getElementById("spinStyle")) {
+    const s = document.createElement("style");
+    s.id = "spinStyle";
+    s.textContent = "@keyframes spin{to{transform:rotate(360deg)}}";
+    document.head.appendChild(s);
+  }
+
   const result = await apiCall("/api/auth/change-password", {
     method: "PUT",
     body: JSON.stringify({ newPassword: newPw }),
   });
-  
+
+  saveBtn.disabled = false;
+  saveBtn.innerHTML = origHTML;
+
   if (result) {
-    alert("Password changed successfully!");
     document.getElementById("securityForm").reset();
+    document.getElementById("successOverlay").classList.add("open");
   } else {
-    alert("Failed to change password");
+    showFormError("Failed to change password. Please try again.");
   }
 });
 
 document.getElementById("cancelBtn").addEventListener("click", () => {
   document.getElementById("securityForm").reset();
+  clearFormError();
 });
 
 if (document.readyState === "loading") {

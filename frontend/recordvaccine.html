@@ -6,6 +6,7 @@
 <title>Record Vaccination</title>
 
 <link rel="stylesheet" href="sidebar.css" />
+<link rel="stylesheet" href="toast.css" />
 
 <style>
   body {
@@ -167,6 +168,148 @@
     height: 16px;
   }
 
+  .save-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+
+  /* ── Success Modal ── */
+  .success-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(10, 25, 50, 0.5);
+    backdrop-filter: blur(5px);
+    justify-content: center;
+    align-items: center;
+  }
+  .success-overlay.active { display: flex; }
+
+  .success-modal {
+    background: #fff;
+    border-radius: 20px;
+    width: 440px;
+    max-width: 92vw;
+    padding: 40px 36px 32px;
+    text-align: center;
+    box-shadow: 0 32px 64px rgba(0,0,0,0.22);
+    animation: popIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(0.88) translateY(20px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .success-icon-wrap {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    box-shadow: 0 8px 24px rgba(22, 163, 74, 0.35);
+    position: relative;
+  }
+
+  .success-icon-wrap svg {
+    width: 34px;
+    height: 34px;
+    color: #fff;
+  }
+
+  .success-ring {
+    position: absolute;
+    inset: -5px;
+    border-radius: 50%;
+    border: 3px solid rgba(22, 163, 74, 0.3);
+    animation: ringPulse 1.8s ease-in-out infinite;
+  }
+
+  @keyframes ringPulse {
+    0%, 100% { transform: scale(1);   opacity: 0.5; }
+    50%       { transform: scale(1.1); opacity: 0;   }
+  }
+
+  .success-title {
+    font-size: 21px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+
+  .success-sub {
+    font-size: 13px;
+    color: #64748b;
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+
+  .success-details {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px 18px;
+    text-align: left;
+    margin-bottom: 26px;
+  }
+
+  .success-details-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 13px;
+    padding: 5px 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .success-details-row:last-child { border-bottom: none; }
+
+  .success-details-label {
+    color: #94a3b8;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .success-details-value {
+    color: #0f172a;
+    font-weight: 600;
+    text-align: right;
+  }
+
+  .success-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .success-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: background 0.15s;
+  }
+
+  .success-btn.primary {
+    background: #142e5c;
+    color: #fff;
+  }
+  .success-btn.primary:hover { background: #0f2448; }
+
+  .success-btn.secondary {
+    background: #f1f5f9;
+    color: #334155;
+  }
+  .success-btn.secondary:hover { background: #e2e8f0; }
+
   @media (max-width: 900px) {
     .grid-2 {
       grid-template-columns: 1fr;
@@ -231,9 +374,6 @@
             <label for="child">Select Child</label>
             <select id="child" required>
               <option value="" selected disabled>Search or select child...</option>
-              <option>Sofia Reyes</option>
-              <option>Marco Reyes</option>
-              <option>Lucas Santos</option>
             </select>
           </div>
 
@@ -244,20 +384,19 @@
                 <option value="" selected disabled>Select vaccine...</option>
                 <option>BCG</option>
                 <option>Hepatitis B</option>
-                <option>PCV</option>
-                <option>Pentavalent</option>
-                <option>Varicella</option>
+                <option>Pentavalent Vaccine (DPT-HepB-Hib)</option>
+                <option>Oral Polio Vaccine (OPV)</option>
+                <option>Pneumococcal Conjugate Vaccine (PCV)</option>
+                <option>Inactivated Polio Vaccine (IPV)</option>
                 <option>MMR</option>
+                <option>Japanese Encephalitis</option>
               </select>
             </div>
 
             <div class="field">
               <label for="dose">Dose Number</label>
               <select id="dose" required>
-                <option>Dose 1</option>
-                <option>Dose 2</option>
-                <option>Dose 3</option>
-                <option>Booster</option>
+                <option value="" selected disabled>Select dose...</option>
               </select>
             </div>
           </div>
@@ -309,10 +448,52 @@
     </div>
   </div>
 
+<!-- Success Modal -->
+<div class="success-overlay" id="successOverlay">
+  <div class="success-modal">
+    <div class="success-icon-wrap">
+      <div class="success-ring"></div>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </div>
+    <div class="success-title">Record Saved!</div>
+    <div class="success-sub">The vaccination has been successfully recorded.</div>
+    <div class="success-details">
+      <div class="success-details-row">
+        <span class="success-details-label">Child</span>
+        <span class="success-details-value" id="sChild"></span>
+      </div>
+      <div class="success-details-row">
+        <span class="success-details-label">Vaccine</span>
+        <span class="success-details-value" id="sVaccine"></span>
+      </div>
+      <div class="success-details-row">
+        <span class="success-details-label">Dose</span>
+        <span class="success-details-value" id="sDose"></span>
+      </div>
+      <div class="success-details-row">
+        <span class="success-details-label">Date Given</span>
+        <span class="success-details-value" id="sDate"></span>
+      </div>
+      <div class="success-details-row">
+        <span class="success-details-label">Administered By</span>
+        <span class="success-details-value" id="sAdminBy"></span>
+      </div>
+    </div>
+    <div class="success-actions">
+      <button class="success-btn secondary" id="successRecordAnother">Record Another</button>
+      <button class="success-btn primary" id="successDone">Done</button>
+    </div>
+  </div>
+</div>
+
+  <script src="toast.js"></script>
   <script>
 const API_BASE_URL = "http://localhost:5502";
 let children = [];
 let selectedChildId = null;
+let vaccineMap = {};
 
 function getAuthToken() { return localStorage.getItem("idToken"); }
 
@@ -331,7 +512,6 @@ async function apiCall(endpoint, options = {}) {
 async function verifyStaffAccess() {
   const profile = await apiCall("/api/staff/profile");
   if (!profile) {
-    alert("Only staff accounts can access this page.");
     localStorage.clear();
     window.location.href = "login.html";
     return false;
@@ -366,51 +546,79 @@ async function loadChildren() {
 async function loadVaccinesForChild() {
   selectedChildId = document.getElementById("child").value;
   if (!selectedChildId) return;
-  
-  const child = children.find(c => c.id === selectedChildId);
-  if (!child) return;
-  
-  // Load scheduled vaccines for this child
-  const schedule = await apiCall(`/api/child/${selectedChildId}/schedule`);
-  if (!schedule) return;
-  
-  // Populate vaccine and dose dropdowns
+
+  const data = await apiCall(`/api/staff/children/${selectedChildId}/vaccinations`);
+  if (!data) return;
+
+  const schedule = data.scheduled || [];
+
   const vaccineSelect = document.getElementById("vaccine");
   const doseSelect = document.getElementById("dose");
-  
-  // Clear existing options (keep the placeholder)
+
+  // Clear existing options
   while (vaccineSelect.options.length > 1) vaccineSelect.remove(1);
-  while (doseSelect.options.length > 0) doseSelect.remove(0);
-  
-  // Group by vaccine name and get unique vaccines with their doses
-  const vaccineMap = {};
+  doseSelect.innerHTML = '<option value="" selected disabled>Select dose...</option>';
+
+  // Group by vaccine name and collect doses per vaccine
+  vaccineMap = {};
   schedule.forEach(vac => {
     if (!vaccineMap[vac.vaccineName]) vaccineMap[vac.vaccineName] = [];
     vaccineMap[vac.vaccineName].push(vac.dose);
   });
-  
+
   Object.keys(vaccineMap).forEach(name => {
     const option = document.createElement("option");
     option.value = name;
     option.textContent = name;
     vaccineSelect.appendChild(option);
   });
-  
-  schedule.forEach((vac, idx) => {
+}
+
+function loadDosesForVaccine() {
+  const vaccine = document.getElementById("vaccine").value;
+  const doseSelect = document.getElementById("dose");
+  doseSelect.innerHTML = '<option value="" selected disabled>Select dose...</option>';
+  if (!vaccine || !vaccineMap[vaccine]) return;
+
+  vaccineMap[vaccine].forEach(dose => {
     const option = document.createElement("option");
-    option.value = vac.dose || `Dose ${idx}`;
-    option.textContent = vac.dose || `Dose ${idx}`;
+    option.value = dose;
+    option.textContent = dose;
     doseSelect.appendChild(option);
   });
 }
 
 document.getElementById("child").addEventListener("change", loadVaccinesForChild);
+document.getElementById("vaccine").addEventListener("change", loadDosesForVaccine);
+
+// Success modal actions
+document.getElementById("successDone").addEventListener("click", () => {
+  document.getElementById("successOverlay").classList.remove("active");
+});
+document.getElementById("successRecordAnother").addEventListener("click", () => {
+  document.getElementById("successOverlay").classList.remove("active");
+  document.getElementById("child").focus();
+});
+document.getElementById("successOverlay").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("successOverlay"))
+    document.getElementById("successOverlay").classList.remove("active");
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") document.getElementById("successOverlay").classList.remove("active");
+});
 
 document.getElementById("recordForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   
+  const saveBtn = document.querySelector(".save-btn");
+  const saveBtnLabel = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8"></path><path d="M7 3v5h8"></path></svg> Save Record`;
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Saving…";
+
   if (!selectedChildId) {
-    alert("Please select a child");
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = saveBtnLabel;
+    vaxToast("Please select a child first.", "warning");
     return;
   }
   
@@ -421,16 +629,21 @@ document.getElementById("recordForm").addEventListener("submit", async (e) => {
   const notes = document.getElementById("notes").value;
   
   if (!vaccine || !dose || !dateAdministered) {
-    alert("Please fill all required fields");
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = saveBtnLabel;
+    vaxToast("Please fill all required fields.", "warning");
     return;
   }
   
   // Find the vaccination record in the schedule
-  const schedule = await apiCall(`/api/child/${selectedChildId}/schedule`);
+  const vaccData = await apiCall(`/api/staff/children/${selectedChildId}/vaccinations`);
+  const schedule = vaccData ? (vaccData.scheduled || []) : [];
   const vaccRecord = schedule.find(v => v.vaccineName === vaccine && v.dose === dose);
   
   if (!vaccRecord) {
-    alert("Could not find vaccine record");
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = saveBtnLabel;
+    vaxToast("Could not find the vaccine record in the schedule.", "error");
     return;
   }
   
@@ -438,19 +651,36 @@ document.getElementById("recordForm").addEventListener("submit", async (e) => {
   const result = await apiCall(`/api/child/${selectedChildId}/vaccination/${vaccRecord.id}/administer`, {
     method: "PUT",
     body: JSON.stringify({
-      dateAdministered,
+      administeredDate: dateAdministered,
       administeredBy,
       notes,
     }),
   });
   
   if (result) {
-    alert("Vaccination record saved successfully!");
+    // Show styled success modal
+    const childName = (children.find(c => c.id === selectedChildId) || {});
+    const displayName = childName.firstName ? `${childName.firstName} ${childName.lastName}` : "—";
+    const displayDate = dateAdministered
+      ? new Date(dateAdministered + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+      : "—";
+
+    document.getElementById("sChild").textContent = displayName;
+    document.getElementById("sVaccine").textContent = vaccine;
+    document.getElementById("sDose").textContent = dose;
+    document.getElementById("sDate").textContent = displayDate;
+    document.getElementById("sAdminBy").textContent = administeredBy || "—";
+
+    document.getElementById("successOverlay").classList.add("active");
     document.getElementById("recordForm").reset();
-    loadChildren();
+    selectedChildId = null;
+    await loadChildren();
   } else {
-    alert("Failed to save vaccination record");
+    vaxToast("Failed to save vaccination record. Please try again.", "error");
   }
+
+  saveBtn.disabled = false;
+  saveBtn.innerHTML = saveBtnLabel;
 });
 
 async function initializePage() {
